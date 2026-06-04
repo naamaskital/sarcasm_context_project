@@ -1,0 +1,18 @@
+Label Breakdown for Context Effect
+==================================
+
+Labels:
+0 = not sarcastic
+1 = sarcastic
+
+Context helped:
+not sarcastic: 37
+sarcastic: 31
+
+Context hurt:
+sarcastic: 31
+not sarcastic: 28
+
+Main observation:
+Context does not only help detect sarcastic comments.
+It affects both classes and sometimes introduces noise.
