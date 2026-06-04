@@ -12,3 +12,6 @@ reports/
 *.pth
 *.bin
 *.ckpt
+
+data
+reports
