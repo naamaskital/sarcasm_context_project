@@ -1,0 +1,13 @@
+
+Error Analysis Summary
+======================
+
+Total examples: 400
+Changed predictions: 127
+
+Context helped: 68
+Context hurt: 59
+Changed but same quality: 0
+
+Accuracy without context: 0.5900
+Accuracy with context: 0.6125
