@@ -17,7 +17,7 @@ MODEL_NAMES = [
 ]
 
 RANDOM_STATE = 42
-SAMPLE_PER_CLASS = 10
+SAMPLE_PER_CLASS = 100
 FEW_SHOT_PER_CLASS = 2
 
 os.makedirs("reports", exist_ok=True)
