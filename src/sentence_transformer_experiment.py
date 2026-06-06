@@ -57,7 +57,10 @@ def evaluate_setting(model, setting_name, train_texts, test_texts, y_train, y_te
 
 
 def main():
+    # קריאת כל הדאטה ודגימה של 4000 שורות לטובת הניסוי המוגדל
     df = pd.read_csv(INPUT_PATH)
+    if len(df) > 4000:
+        df = df.sample(n=4000, random_state=RANDOM_STATE)
 
     df["context_only"] = df["context"].astype(str)
     df["comment_only"] = df["comment"].astype(str)
