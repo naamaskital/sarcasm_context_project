@@ -14,8 +14,8 @@ if str(ROOT) not in sys.path:
 from src.full_dataset_utils import load_or_create_splits
 
 MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
-REPORT_DIR = Path("reports/full_dataset/embeddings")
-CACHE_DIR = Path("data/full_dataset_embeddings")
+REPORT_DIR = ROOT / "reports" / "full_dataset" / "embeddings"
+CACHE_DIR = ROOT / ".cache" / "sarcasm_context_project" / "full_dataset_embeddings"
 BATCH_SIZE = 128
 CHUNK_SIZE = 20000
 SEED = 42
@@ -23,9 +23,9 @@ SEED = 42
 
 def summarize(y_true, y_pred):
     return {
-        "accuracy": accuracy_score(y_true, y_pred),
-        "macro_f1": f1_score(y_true, y_pred, average="macro"),
-        "sarcastic_f1": f1_score(y_true, y_pred, pos_label=1),
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "macro_f1": float(f1_score(y_true, y_pred, average="macro")),
+        "sarcastic_f1": float(f1_score(y_true, y_pred, pos_label=1)),
     }
 
 
@@ -67,11 +67,12 @@ def select_features(X_context, X_comment, start, end, mode):
 
 
 def train_online_linear_classifier(X_context, X_comment, y, mode):
+    # Embeddings are L2-normalized by SentenceTransformer, so no extra scaler is needed.
     clf = SGDClassifier(
         loss="log_loss",
         penalty="l2",
         alpha=1e-5,
-        class_weight="balanced",
+        class_weight=None,
         random_state=SEED,
         average=True,
     )
