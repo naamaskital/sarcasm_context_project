@@ -8,7 +8,10 @@ from sklearn.model_selection import train_test_split
 DATASET_REPO = "marcbishara/sarcasm-on-reddit"
 DATASET_FILE = "train-balanced-sarcasm.csv"
 SEED = 42
-SPLIT_DIR = Path("data/full_dataset_splits")
+
+ROOT = Path(__file__).resolve().parents[1]
+CACHE_ROOT = ROOT / ".cache" / "sarcasm_context_project"
+SPLIT_DIR = CACHE_ROOT / "full_dataset_splits"
 
 
 def _clean(df):
@@ -75,7 +78,7 @@ def load_or_create_splits():
     }
 
     if all(path.exists() for path in paths.values()):
-        print("Loading cached fixed splits...")
+        print("Loading cached fixed splits from:", SPLIT_DIR)
         return tuple(pd.read_parquet(paths[name]) for name in ["train", "validation", "test"])
 
     df = load_full_corpus()
@@ -90,6 +93,7 @@ def load_or_create_splits():
     print("validation:", len(val_df))
     print("test:", len(test_df))
     print("total:", len(train_df) + len(val_df) + len(test_df))
+    print("Saved fixed splits to:", SPLIT_DIR)
 
     return train_df, val_df, test_df
 
