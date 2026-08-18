@@ -1,0 +1,7 @@
+model,input,split,n_examples,accuracy,macro_f1,sarcastic_f1
+TF-IDF + Logistic Regression,comment_only,validation,101077,0.725249,0.724947,0.715825
+TF-IDF + Logistic Regression,comment_only,test,101078,0.724579,0.724161,0.713422
+TF-IDF + Logistic Regression,context_only,validation,101077,0.586177,0.586138,0.582113
+TF-IDF + Logistic Regression,context_only,test,101078,0.585657,0.585622,0.581855
+TF-IDF + Logistic Regression,context_plus_comment,validation,101077,0.704413,0.704138,0.695117
+TF-IDF + Logistic Regression,context_plus_comment,test,101078,0.704852,0.704483,0.694049
