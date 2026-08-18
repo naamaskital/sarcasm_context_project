@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 
 from src.full_dataset_utils import load_or_create_splits
 
-REPORT_DIR = Path("reports/full_dataset/tfidf")
+REPORT_DIR = ROOT / "reports" / "full_dataset" / "tfidf"
 
 
 def text_for_mode(df, mode):
@@ -29,9 +29,9 @@ def text_for_mode(df, mode):
 
 def summarize(y_true, y_pred):
     return {
-        "accuracy": accuracy_score(y_true, y_pred),
-        "macro_f1": f1_score(y_true, y_pred, average="macro"),
-        "sarcastic_f1": f1_score(y_true, y_pred, pos_label=1),
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "macro_f1": float(f1_score(y_true, y_pred, average="macro")),
+        "sarcastic_f1": float(f1_score(y_true, y_pred, pos_label=1)),
     }
 
 
@@ -45,9 +45,10 @@ def make_model():
             dtype=np.float32,
         )),
         ("classifier", LogisticRegression(
-            max_iter=1000,
+            max_iter=100,
+            tol=1e-3,
             class_weight="balanced",
-            solver="liblinear",
+            solver="saga",
             random_state=42,
         )),
     ])
