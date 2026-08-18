@@ -6,10 +6,12 @@ import pandas as pd
 import torch
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from sklearn.metrics import accuracy_score, f1_score
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, Trainer, TrainingArguments
 
 SEED = 42
+DATASET_NAME = "marcbishara/sarcasm-on-reddit"
+DATASET_SPLIT = "sft_train"
 MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 NUM_EPOCHS = 5
 TRAIN_PER_CLASS = 1500
@@ -29,13 +31,14 @@ def set_seed(seed=SEED):
 
 
 def load_and_prepare_dataframe():
-    print("Loading dataset from Hugging Face: marcbishara/sarcasm-on-reddit")
-    raw = load_dataset("marcbishara/sarcasm-on-reddit", split="train")
+    print(f"Loading dataset from Hugging Face: {DATASET_NAME} ({DATASET_SPLIT})")
+    raw = load_dataset(DATASET_NAME, split=DATASET_SPLIT)
     df = raw.to_pandas()
     if "context" not in df.columns and "parent_comment" in df.columns:
         df = df.rename(columns={"parent_comment": "context"})
     df = df[["label", "comment", "context"]].dropna().copy()
     df["label"] = df["label"].astype(int)
+    print("Label counts after dropping missing text:")
     print(df["label"].value_counts())
     return df
 
@@ -63,6 +66,7 @@ def make_balanced_splits(df):
         perm = np.roll(perm, 1)
     test_df["random_context"] = test_df.iloc[perm]["context"].to_numpy()
 
+    print("Split sizes:")
     for name, split in [("train", train_df), ("val", val_df), ("test", test_df)]:
         print(name, len(split), split["label"].value_counts().to_dict())
     return train_df, val_df, test_df
@@ -112,6 +116,10 @@ def summarize(labels, preds):
 
 
 def train_mode(train_df, val_df, test_df, mode):
+    print("\n" + "=" * 72)
+    print("Training:", mode)
+    print("=" * 72)
+
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -204,6 +212,7 @@ def main():
 
     summary = pd.DataFrame(rows)
     summary.to_csv(REPORT_DIR / "qwen_lora_context_ablation_summary.csv", index=False)
+    print("\nFINAL SUMMARY")
     print(summary.to_string(index=False))
 
 
