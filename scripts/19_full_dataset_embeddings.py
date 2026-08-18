@@ -1,0 +1,181 @@
+from pathlib import Path
+import sys
+
+import numpy as np
+import pandas as pd
+from sentence_transformers import SentenceTransformer
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.preprocessing import StandardScaler
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.full_dataset_utils import load_or_create_splits
+
+MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+REPORT_DIR = Path("reports/full_dataset/embeddings")
+CACHE_DIR = Path("data/full_dataset_embeddings")
+BATCH_SIZE = 128
+CHUNK_SIZE = 20000
+SEED = 42
+
+
+def summarize(y_true, y_pred):
+    return {
+        "accuracy": accuracy_score(y_true, y_pred),
+        "macro_f1": f1_score(y_true, y_pred, average="macro"),
+        "sarcastic_f1": f1_score(y_true, y_pred, pos_label=1),
+    }
+
+
+def encode_to_memmap(model, texts, path, dim):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    n = len(texts)
+
+    if path.exists():
+        print("Using cached embeddings:", path)
+        return np.memmap(path, dtype="float32", mode="r", shape=(n, dim))
+
+    mmap = np.memmap(path, dtype="float32", mode="w+", shape=(n, dim))
+    for start in range(0, n, CHUNK_SIZE):
+        end = min(start + CHUNK_SIZE, n)
+        print(f"Encoding {path.stem}: {start:,}-{end:,}/{n:,}")
+        emb = model.encode(
+            texts.iloc[start:end].tolist(),
+            batch_size=BATCH_SIZE,
+            show_progress_bar=True,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        ).astype(np.float32)
+        mmap[start:end] = emb
+        mmap.flush()
+    return mmap
+
+
+def train_online_linear_classifier(X_context, X_comment, y, mode):
+    clf = SGDClassifier(
+        loss="log_loss",
+        penalty="l2",
+        alpha=1e-5,
+        class_weight="balanced",
+        random_state=SEED,
+        average=True,
+    )
+
+    scaler = StandardScaler(with_mean=False)
+    classes = np.array([0, 1])
+
+    for start in range(0, len(y), CHUNK_SIZE):
+        end = min(start + CHUNK_SIZE, len(y))
+        if mode == "comment_only":
+            X = np.asarray(X_comment[start:end])
+        elif mode == "context_only":
+            X = np.asarray(X_context[start:end])
+        elif mode == "dual_embeddings":
+            X = np.concatenate(
+                [np.asarray(X_context[start:end]), np.asarray(X_comment[start:end])],
+                axis=1,
+            )
+        else:
+            raise ValueError(mode)
+
+        X = scaler.partial_fit(X).transform(X)
+        clf.partial_fit(X, y[start:end], classes=classes)
+        print(f"Training {mode}: {end:,}/{len(y):,}")
+
+    return scaler, clf
+
+
+def predict_in_chunks(scaler, clf, X_context, X_comment, mode):
+    preds = np.empty(len(X_comment), dtype=np.int64)
+
+    for start in range(0, len(preds), CHUNK_SIZE):
+        end = min(start + CHUNK_SIZE, len(preds))
+        if mode == "comment_only":
+            X = np.asarray(X_comment[start:end])
+        elif mode == "context_only":
+            X = np.asarray(X_context[start:end])
+        elif mode == "dual_embeddings":
+            X = np.concatenate(
+                [np.asarray(X_context[start:end]), np.asarray(X_comment[start:end])],
+                axis=1,
+            )
+        else:
+            raise ValueError(mode)
+
+        preds[start:end] = clf.predict(scaler.transform(X))
+
+    return preds
+
+
+def main():
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    train_df, val_df, test_df = load_or_create_splits()
+    print("Full-data split sizes:", len(train_df), len(val_df), len(test_df))
+
+    model = SentenceTransformer(MODEL_ID)
+    dim = model.get_sentence_embedding_dimension()
+
+    embeddings = {}
+    for split_name, df in [("train", train_df), ("validation", val_df), ("test", test_df)]:
+        embeddings[(split_name, "context")] = encode_to_memmap(
+            model,
+            df["context"],
+            CACHE_DIR / f"{split_name}_context.f32",
+            dim,
+        )
+        embeddings[(split_name, "comment")] = encode_to_memmap(
+            model,
+            df["comment"],
+            CACHE_DIR / f"{split_name}_comment.f32",
+            dim,
+        )
+
+    rows = []
+    y_train = train_df["label"].to_numpy()
+
+    for mode in ["comment_only", "context_only", "dual_embeddings"]:
+        print("\nTraining full-data embedding classifier:", mode)
+        scaler, clf = train_online_linear_classifier(
+            embeddings[("train", "context")],
+            embeddings[("train", "comment")],
+            y_train,
+            mode,
+        )
+
+        for split_name, df in [("validation", val_df), ("test", test_df)]:
+            pred = predict_in_chunks(
+                scaler,
+                clf,
+                embeddings[(split_name, "context")],
+                embeddings[(split_name, "comment")],
+                mode,
+            )
+            y = df["label"].to_numpy()
+            row = {
+                "model": "all-MiniLM-L6-v2 + online linear classifier",
+                "input": mode,
+                "split": split_name,
+                "n_examples": len(df),
+                **summarize(y, pred),
+            }
+            rows.append(row)
+            print(row)
+
+            if split_name == "test":
+                out = df[["context", "comment", "label"]].copy()
+                out["prediction"] = pred
+                out.to_parquet(REPORT_DIR / f"{mode}_test_predictions.parquet", index=False)
+
+    metrics = pd.DataFrame(rows)
+    metrics.to_csv(REPORT_DIR / "full_dataset_embedding_metrics.csv", index=False)
+    print("\nFINAL")
+    print(metrics.to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()
