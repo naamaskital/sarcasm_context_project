@@ -84,6 +84,23 @@ The true-context model is only slightly better than comment-only, but replacing 
 
 The classical and embedding experiments also show that simply adding context does not guarantee improvement. In particular, some sentence-embedding variants were relatively insensitive to whether the context was correct, suggesting that representation design matters.
 
+### Hard context ablation
+
+A stronger controlled experiment was added to test whether the embedding-based classifier uses the exact conversational context or only broad semantic/topic compatibility. The classifier was trained once on true context + comment using a balanced 20,000-example sample, then evaluated on the same 4,000-example test set while only the context was replaced.
+
+| Test context | Accuracy | Macro-F1 | 95% paired bootstrap delta vs. true |
+|---|---:|---:|---:|
+| true context | 0.6540 | 0.6540 | - |
+| random wrong context | 0.6375 | 0.6375 | [0.0035, 0.0293] |
+| same-subreddit wrong context | 0.6390 | 0.6390 | [0.0020, 0.0290] |
+| semantically similar wrong context | 0.6540 | 0.6540 | [-0.0113, 0.0118] |
+
+Same-subreddit hard negatives were available for **84.7%** of the test set. The mean cosine similarity of the semantic hard negatives was **0.4451**.
+
+The result is intentionally nuanced: replacing the real context with random or same-subreddit context causes a statistically consistent drop in Macro-F1, but a semantically similar incorrect context performs essentially the same as the true context. This suggests that the frozen embedding classifier benefits from **semantic compatibility** between context and reply, yet does not reliably identify the exact conversational dependency. This limitation motivates stronger interaction models such as cross-encoders or fine-tuned LLMs.
+
+Detailed results are stored under `reports/hard_context_ablation/`, and the experiment is implemented in `scripts/16_hard_context_ablation.py`.
+
 ## Reproducing the project
 
 Create an environment and install dependencies:
@@ -111,6 +128,14 @@ python src/sentence_transformer_experiment.py
 
 Additional embedding analyses are under `scripts/`.
 
+### Hard context ablation
+
+```bash
+python scripts/16_hard_context_ablation.py
+```
+
+This experiment trains once on true context + comment and replaces only the test context with random, same-subreddit, and semantically similar hard negatives. It also reports paired 95% bootstrap confidence intervals.
+
 ### Final Qwen + LoRA ablation
 
 ```bash
@@ -131,10 +156,17 @@ The repository also keeps earlier zero-shot, few-shot, model-size, and prelimina
 │   └── reddit_sarcasm_context_sample.csv
 ├── reports/
 │   ├── final_results.csv
+│   ├── hard_context_ablation/
+│   │   ├── hard_context_ablation_metrics.csv
+│   │   └── hard_context_ablation_summary.txt
 │   └── qwen_lora_ablation/
 │       └── qwen_lora_context_ablation_summary.csv
 ├── reports_backup/                 # earlier experiment outputs
-├── scripts/                        # additional embedding / ablation experiments
+├── scripts/
+│   ├── 13_train_contrast_features.py
+│   ├── 14_train_dual_embeddings.py
+│   ├── 15_ablation_embedding_inputs.py
+│   └── 16_hard_context_ablation.py
 ├── src/
 │   ├── context_control_experiment.py
 │   ├── sentence_transformer_experiment.py
@@ -152,7 +184,8 @@ The repository also keeps earlier zero-shot, few-shot, model-size, and prelimina
 - **The reply is the main source of signal**: comment-only is already substantially stronger.
 - **True context can add useful information**, but the gain over comment-only is modest.
 - **Random-context ablation is essential**: for Qwen, unrelated context reduces performance substantially compared with the true conversational context.
-- **A larger or more semantic model is not automatically better**: the TF-IDF baseline remains competitive, and representation choices affect whether a model actually uses context.
+- **Hard-negative analysis reveals a limitation**: the embedding classifier distinguishes true context from random and same-community context, but not from semantically similar incorrect context.
+- **A larger or more semantic model is not automatically better**: representation choices affect whether a model actually uses conversational relationships rather than topical similarity.
 
 ## References
 

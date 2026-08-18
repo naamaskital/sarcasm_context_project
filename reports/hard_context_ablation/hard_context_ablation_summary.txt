@@ -1,0 +1,22 @@
+Hard Context Ablation
+============================================================
+
+The classifier is trained once using true context + comment.
+At test time only, the context is replaced with increasingly difficult wrong contexts.
+
+Split sizes: train=16000, test=4000
+Same-subreddit match coverage: 0.8470
+Mean semantic-hard-negative cosine similarity: 0.4451
+
+condition                           accuracy  macro_f1  sarcastic_f1  macro_f1_drop_vs_true  bootstrap_delta_mean  bootstrap_ci_low  bootstrap_ci_high
+true_context                        0.6540    0.653993  0.655550      0.000000               0.000000              0.000000          0.000000
+random_context                      0.6375    0.637498  0.636591      0.016495               0.016365              0.003511          0.029259
+same_subreddit_wrong_context        0.6390    0.638996  0.640259      0.014997               0.015061              0.001995          0.028986
+semantic_similar_wrong_context      0.6540    0.653996  0.652785     -0.000003               0.000028             -0.011265          0.011765
+
+Interpretation:
+- Replacing the true context with a random context reduces Macro-F1 by about 0.0165. The paired 95% bootstrap CI is fully above zero.
+- Replacing it with a wrong context from the same subreddit also reduces Macro-F1 by about 0.0150. The paired 95% bootstrap CI is fully above zero.
+- A semantically similar but incorrect context produces essentially the same Macro-F1 as the true context, and the paired CI includes zero.
+
+This suggests that the embedding-based classifier benefits from topic/semantic compatibility in the context, but does not reliably distinguish the exact conversational context from a semantically similar incorrect one.
