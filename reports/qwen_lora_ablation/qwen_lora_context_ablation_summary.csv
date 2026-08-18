@@ -1,0 +1,5 @@
+trained_on,evaluated_on,accuracy,macro_f1,sarcastic_f1
+comment_only,comment_only,0.683,0.6829743209199945,0.6801210898082745
+context_plus_comment,true_context_plus_comment,0.685,0.6849971649744848,0.6859421734795613
+context_plus_comment,random_context_plus_comment,0.653,0.6527829893683552,0.6614634146341464
+context_only,context_only,0.566,0.5612545289855073,0.6068840579710145
