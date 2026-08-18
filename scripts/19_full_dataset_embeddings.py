@@ -6,7 +6,6 @@ import pandas as pd
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score, f1_score
-from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -54,6 +53,19 @@ def encode_to_memmap(model, texts, path, dim):
     return mmap
 
 
+def select_features(X_context, X_comment, start, end, mode):
+    if mode == "comment_only":
+        return np.asarray(X_comment[start:end])
+    if mode == "context_only":
+        return np.asarray(X_context[start:end])
+    if mode == "dual_embeddings":
+        return np.concatenate(
+            [np.asarray(X_context[start:end]), np.asarray(X_comment[start:end])],
+            axis=1,
+        )
+    raise ValueError(mode)
+
+
 def train_online_linear_classifier(X_context, X_comment, y, mode):
     clf = SGDClassifier(
         loss="log_loss",
@@ -63,49 +75,24 @@ def train_online_linear_classifier(X_context, X_comment, y, mode):
         random_state=SEED,
         average=True,
     )
-
-    scaler = StandardScaler(with_mean=False)
     classes = np.array([0, 1])
 
     for start in range(0, len(y), CHUNK_SIZE):
         end = min(start + CHUNK_SIZE, len(y))
-        if mode == "comment_only":
-            X = np.asarray(X_comment[start:end])
-        elif mode == "context_only":
-            X = np.asarray(X_context[start:end])
-        elif mode == "dual_embeddings":
-            X = np.concatenate(
-                [np.asarray(X_context[start:end]), np.asarray(X_comment[start:end])],
-                axis=1,
-            )
-        else:
-            raise ValueError(mode)
-
-        X = scaler.partial_fit(X).transform(X)
+        X = select_features(X_context, X_comment, start, end, mode)
         clf.partial_fit(X, y[start:end], classes=classes)
         print(f"Training {mode}: {end:,}/{len(y):,}")
 
-    return scaler, clf
+    return clf
 
 
-def predict_in_chunks(scaler, clf, X_context, X_comment, mode):
+def predict_in_chunks(clf, X_context, X_comment, mode):
     preds = np.empty(len(X_comment), dtype=np.int64)
 
     for start in range(0, len(preds), CHUNK_SIZE):
         end = min(start + CHUNK_SIZE, len(preds))
-        if mode == "comment_only":
-            X = np.asarray(X_comment[start:end])
-        elif mode == "context_only":
-            X = np.asarray(X_context[start:end])
-        elif mode == "dual_embeddings":
-            X = np.concatenate(
-                [np.asarray(X_context[start:end]), np.asarray(X_comment[start:end])],
-                axis=1,
-            )
-        else:
-            raise ValueError(mode)
-
-        preds[start:end] = clf.predict(scaler.transform(X))
+        X = select_features(X_context, X_comment, start, end, mode)
+        preds[start:end] = clf.predict(X)
 
     return preds
 
@@ -140,7 +127,7 @@ def main():
 
     for mode in ["comment_only", "context_only", "dual_embeddings"]:
         print("\nTraining full-data embedding classifier:", mode)
-        scaler, clf = train_online_linear_classifier(
+        clf = train_online_linear_classifier(
             embeddings[("train", "context")],
             embeddings[("train", "comment")],
             y_train,
@@ -149,7 +136,6 @@ def main():
 
         for split_name, df in [("validation", val_df), ("test", test_df)]:
             pred = predict_in_chunks(
-                scaler,
                 clf,
                 embeddings[(split_name, "context")],
                 embeddings[(split_name, "comment")],
