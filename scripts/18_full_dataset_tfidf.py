@@ -1,10 +1,16 @@
 from pathlib import Path
+import sys
 
+import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.pipeline import Pipeline
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from src.full_dataset_utils import load_or_create_splits
 
@@ -36,7 +42,7 @@ def make_model():
             min_df=2,
             max_features=120000,
             sublinear_tf=True,
-            dtype="float32",
+            dtype=np.float32,
         )),
         ("classifier", LogisticRegression(
             max_iter=1000,
