@@ -1,132 +1,161 @@
 # Sarcasm Detection with Conversational Context
 
-## Overview
+Final project for **Advanced Models of Language Understanding**.
 
-This project investigates whether conversational context improves sarcasm detection in Reddit comments.
+## Research question
 
-The main goal is to compare sarcasm classification using only the target comment versus using the previous Reddit message as additional context. The project includes classical machine learning baselines, sentence embedding approaches, and LLM-based experiments with Qwen models.
+**Does the previous Reddit message provide useful information for detecting sarcasm in a reply?**
 
-The focus of the project is not only to improve accuracy, but also to understand when context helps, when it hurts, and how different models use conversational information.
+The project compares four controlled input conditions:
 
-## Research Question
+1. **Comment only** - the target Reddit reply.
+2. **Context only** - the previous message.
+3. **True context + comment** - the real conversational pair.
+4. **Random context + comment** - the same reply paired with an unrelated context.
 
-Does adding the previous Reddit message improve sarcasm classification compared to using the reply alone?
+The random-context condition is the key ablation: it separates a benefit from *meaningful conversational context* from a benefit caused only by adding more text.
 
 ## Dataset
 
-The project uses a Reddit sarcasm dataset containing:
+The text fields are:
 
-* `comment` - the target Reddit reply
-* `parent_comment` - the previous message in the conversation
-* `label` - sarcasm label
+- `comment` - target Reddit reply
+- `parent_comment` / `context` - previous Reddit message
+- `label` - binary sarcasm label
 
-The experiments compare several input settings:
+Two data settings are kept separate in this repository:
 
-* **Comment only** - using only the target reply
-* **Context only** - using only the previous Reddit message
-* **Context + comment** - combining the previous message with the reply
-* **Random context + comment** - using mismatched context as an ablation test
+- `data_backup/reddit_sarcasm_context_sample.csv` is a small balanced **2,000-example sample** bundled with the repository for quick sanity checks.
+- The final Qwen + LoRA experiments used the larger Hugging Face dataset `marcbishara/sarcasm-on-reddit`. The logged final split was fully balanced: **3,000 train, 500 validation, 1,000 test**.
 
-The random-context setup helps evaluate whether the model benefits from the true conversational context or simply from seeing more text.
+This distinction matters: the bundled-sample sanity run should not be compared numerically with the larger final experiments as if they were the same split.
 
 ## Methods
 
-### Classical Machine Learning Baseline
+### 1. TF-IDF + Logistic Regression
 
-Implemented TF-IDF feature extraction with Logistic Regression for sarcasm classification.
+A classical lexical baseline using unigram and bigram TF-IDF features and balanced Logistic Regression. It tests how much sarcasm can be predicted from recurring lexical cues without a neural language model.
 
-Tested multiple input configurations:
+### 2. Sentence Transformer embeddings
 
-* Comment only
-* Context only
-* Context + comment
-* Random context + comment
+`all-MiniLM-L6-v2` is used as a frozen semantic encoder. Experiments include joint text representations and separate context/comment embeddings followed by a classifier.
 
-### Sentence Embedding Models
+### 3. Qwen2.5-0.5B-Instruct + LoRA
 
-Used sentence embeddings to represent comments and conversational context in a dense semantic space.
+The final language-model experiment treats Qwen as a binary sequence classifier and adapts it using LoRA rather than full fine-tuning.
 
-Compared different representation strategies, including:
+Final configuration documented by the saved training run:
 
-* Joint context-comment representation
-* Separate embeddings for context and comment
-* Feature combinations based on the relationship between the two texts
+- Model: `Qwen/Qwen2.5-0.5B-Instruct`
+- LoRA rank: 8
+- LoRA alpha: 16
+- LoRA dropout: 0.1
+- Target modules: `q_proj`, `v_proj`
+- Learning rate: `2e-4`
+- Batch size: 8
+- Epochs: 5
+- Trainable parameters in the logged run: about 542K of 494.6M (~0.11%)
 
-### LLM-Based Experiments
+`src/qwen_lora_context_ablation.py` reconstructs this final experimental configuration and all four input conditions. The exact saved metrics from the completed run are stored in `reports/qwen_lora_ablation/qwen_lora_context_ablation_summary.csv`.
 
-Experimented with Qwen models for sarcasm detection using prompting and fine-tuning.
+## Final results
 
-The experiments included:
+The main verified/report results are collected in `reports/final_results.csv`.
 
-* Zero-shot prompting
-* Few-shot prompting
-* Model size comparison
-* LoRA fine-tuning
-* Context ablation experiments
+| Model | Input | Accuracy | Macro-F1 | Sarcastic F1 |
+|---|---|---:|---:|---:|
+| TF-IDF + Logistic Regression | context only | 0.5425 | 0.5425 | 0.5395 |
+| TF-IDF + Logistic Regression | comment only | 0.6430 | 0.6426 | 0.6301 |
+| TF-IDF + Logistic Regression | true context + comment | 0.6500 | 0.6499 | 0.6436 |
+| Sentence Transformer, separate embeddings | true context + comment | 0.6335 | 0.6334 | 0.6380 |
+| Qwen2.5-0.5B + LoRA | context only | 0.5660 | 0.5613 | 0.6069 |
+| Qwen2.5-0.5B + LoRA | comment only | 0.6830 | 0.6830 | 0.6801 |
+| Qwen2.5-0.5B + LoRA | true context + comment | **0.6850** | **0.6850** | **0.6859** |
+| Qwen2.5-0.5B + LoRA | random context + comment | 0.6530 | 0.6528 | 0.6615 |
 
-## Experiments
+### Context ablation
 
-The project includes the following main experimental settings:
+The most important Qwen comparison is:
 
-| Setting                  | Description                                           |
-| ------------------------ | ----------------------------------------------------- |
-| Comment only             | Uses only the target Reddit comment                   |
-| Context only             | Uses only the previous Reddit message                 |
-| Context + comment        | Uses both the previous message and the target comment |
-| Random context + comment | Uses an unrelated context as an ablation test         |
+- true context + comment: Macro-F1 **0.6850**
+- random context + comment: Macro-F1 **0.6528**
 
-These settings allow a clearer analysis of whether context provides meaningful information for sarcasm detection.
+The true-context model is only slightly better than comment-only, but replacing the true context with unrelated text causes a clear drop. This supports a cautious conclusion: **the reply contains most of the predictive signal, while the correct context provides additional information that the fine-tuned Qwen model can use.**
 
-## Key Findings
+The classical and embedding experiments also show that simply adding context does not guarantee improvement. In particular, some sentence-embedding variants were relatively insensitive to whether the context was correct, suggesting that representation design matters.
 
-The results show that conversational context can help sarcasm detection, but the improvement depends on the model and the way context is represented.
+## Reproducing the project
 
-Main insights:
+Create an environment and install dependencies:
 
-* Context alone is usually not enough for reliable sarcasm detection.
-* Adding the true context can improve performance compared to using random context.
-* Some models benefit from context more than others.
-* Random-context ablation is important because it shows whether the model is using meaningful conversational information or just benefiting from additional text.
-* Qualitative error analysis shows that context can help in cases where sarcasm depends on contradiction, tone, or the previous message.
+```bash
+python -m venv .venv
+source .venv/bin/activate          # Linux / macOS
+# .venv\Scripts\activate         # Windows
+pip install -r requirements.txt
+```
 
-## Technologies Used
+### Quick bundled-sample baseline
 
-* Python
-* Natural Language Processing
-* Machine Learning
-* TF-IDF
-* Logistic Regression
-* Sentence Embeddings
-* Hugging Face
-* Qwen
-* LoRA Fine-Tuning
-* scikit-learn
-* PyTorch
+```bash
+python src/context_control_experiment.py
+```
 
-## Repository Structure
+This automatically uses `data_backup/reddit_sarcasm_context_sample.csv` when no `data/` copy exists and writes results to `reports/sample_baseline/`.
+
+### Sentence Transformer experiment
+
+```bash
+python src/sentence_transformer_experiment.py
+```
+
+Additional embedding analyses are under `scripts/`.
+
+### Final Qwen + LoRA ablation
+
+```bash
+python src/qwen_lora_context_ablation.py
+```
+
+This experiment downloads the Hugging Face dataset and Qwen checkpoint. A CUDA-capable GPU is strongly recommended. Outputs are written to `reports/qwen_lora_ablation/` and checkpoints to `models/qwen_lora_ablation/`.
+
+### Exploratory Qwen experiments
+
+The repository also keeps earlier zero-shot, few-shot, model-size, and preliminary LoRA scripts for the experimental record. They are useful for showing the development process, but the final Qwen result reported above is the five-epoch LoRA context-ablation experiment.
+
+## Repository structure
 
 ```text
 .
-├── src/              # Experiment scripts and model training code
-├── data_backup/      # Small dataset sample or backup files
-├── reports_backup/   # Saved preliminary reports and experiment outputs
-├── reports/          # Generated reports and evaluation results
+├── data_backup/
+│   └── reddit_sarcasm_context_sample.csv
+├── reports/
+│   ├── final_results.csv
+│   └── qwen_lora_ablation/
+│       └── qwen_lora_context_ablation_summary.csv
+├── reports_backup/                 # earlier experiment outputs
+├── scripts/                        # additional embedding / ablation experiments
+├── src/
+│   ├── context_control_experiment.py
+│   ├── sentence_transformer_experiment.py
+│   ├── qwen_zero_shot_experiment.py
+│   ├── qwen_size_comparison_experiment.py
+│   ├── qwen_lora_experiment.py     # earlier LoRA version
+│   └── qwen_lora_context_ablation.py
+├── requirements.txt
 └── README.md
 ```
 
-## What I Learned
+## Main conclusions
 
-This project strengthened my experience with NLP research workflows, including dataset preparation, text representation, baseline modeling, LLM experimentation, ablation testing, and model evaluation.
+- **Context alone is weak**: the previous message is not a reliable sarcasm label by itself.
+- **The reply is the main source of signal**: comment-only is already substantially stronger.
+- **True context can add useful information**, but the gain over comment-only is modest.
+- **Random-context ablation is essential**: for Qwen, unrelated context reduces performance substantially compared with the true conversational context.
+- **A larger or more semantic model is not automatically better**: the TF-IDF baseline remains competitive, and representation choices affect whether a model actually uses context.
 
-It also helped me understand that improving a model is not only about achieving higher accuracy, but also about designing meaningful experiments that explain why a model succeeds or fails.
+## References
 
-## Future Work
-
-Possible future improvements include:
-
-* Training larger LLMs on a larger dataset split
-* Running additional fine-tuning epochs
-* Adding more encoder-based baselines
-* Performing deeper qualitative analysis of context-helped and context-hurt examples
-* Improving prompt design for zero-shot and few-shot experiments
-* Testing additional context representation methods
+- Khodak, M., Saunshi, N., & Vodrahalli, K. (2018). *A Large Self-Annotated Corpus for Sarcasm*. LREC.
+- Hazarika, D., Poria, S., Gorantla, S., Cambria, E., Zimmermann, R., & Mihalcea, R. (2018). *CASCADE: Contextual Sarcasm Detection in Online Discussion Forums*. COLING.
+- Hu, E. J. et al. (2022). *LoRA: Low-Rank Adaptation of Large Language Models*. ICLR.
