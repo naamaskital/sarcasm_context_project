@@ -74,38 +74,60 @@ def encode(model, texts):
     ).astype(np.float32)
 
 
+def derangement(values, rng):
+    values = np.asarray(values)
+    if len(values) < 2:
+        raise ValueError("Need at least two values for a derangement")
+
+    perm = rng.permutation(values)
+    while np.any(perm == values):
+        perm = rng.permutation(values)
+    return perm
+
+
 def random_wrong_indices(n, seed):
     rng = np.random.default_rng(seed)
-    idx = np.arange(n)
-    perm = rng.permutation(n)
-    while np.any(perm == idx):
-        perm = rng.permutation(n)
-    return perm
+    return derangement(np.arange(n), rng)
 
 
 def same_subreddit_wrong_indices(test_df, seed):
     rng = np.random.default_rng(seed)
     result = np.full(len(test_df), -1, dtype=int)
+    used_same_subreddit = np.zeros(len(test_df), dtype=bool)
 
     for _, group in test_df.groupby("subreddit", sort=False):
         indices = group.index.to_numpy()
         if len(indices) < 2:
             continue
-        perm = rng.permutation(indices)
-        if np.any(perm == indices):
-            perm = np.roll(perm, 1)
-        result[indices] = perm
+        result[indices] = derangement(indices, rng)
+        used_same_subreddit[indices] = True
 
     fallback = random_wrong_indices(len(test_df), seed + 1)
     missing = result < 0
     result[missing] = fallback[missing]
-    return result
+    return result, used_same_subreddit
 
 
-def semantic_wrong_indices(context_embeddings):
+def semantic_wrong_indices(context_embeddings, contexts):
     similarities = context_embeddings @ context_embeddings.T
     np.fill_diagonal(similarities, -np.inf)
-    return np.argmax(similarities, axis=1)
+
+    # Do not allow an identical context string to count as a hard negative.
+    text_to_indices = {}
+    for idx, text in enumerate(contexts):
+        text_to_indices.setdefault(text, []).append(idx)
+
+    for indices in text_to_indices.values():
+        if len(indices) > 1:
+            similarities[np.ix_(indices, indices)] = -np.inf
+
+    chosen = np.argmax(similarities, axis=1)
+    chosen_similarity = similarities[np.arange(len(similarities)), chosen]
+
+    if np.any(~np.isfinite(chosen_similarity)):
+        raise ValueError("Could not find a distinct semantic hard negative for every test row")
+
+    return chosen, chosen_similarity
 
 
 def build_features(context_emb, comment_emb):
@@ -176,8 +198,11 @@ def main():
 
     print("Building hard negative contexts...")
     random_idx = random_wrong_indices(len(test_df), RANDOM_STATE)
-    subreddit_idx = same_subreddit_wrong_indices(test_df, RANDOM_STATE)
-    semantic_idx = semantic_wrong_indices(test_context_emb)
+    subreddit_idx, same_subreddit_mask = same_subreddit_wrong_indices(test_df, RANDOM_STATE)
+    semantic_idx, semantic_similarity = semantic_wrong_indices(
+        test_context_emb,
+        test_df["context"].tolist(),
+    )
 
     context_conditions = {
         "true_context": test_context_emb,
@@ -228,19 +253,28 @@ def main():
 
     predictions["random_context"] = test_df.iloc[random_idx]["context"].to_numpy()
     predictions["same_subreddit_wrong_context"] = test_df.iloc[subreddit_idx]["context"].to_numpy()
+    predictions["same_subreddit_is_matched"] = same_subreddit_mask
     predictions["semantic_similar_wrong_context"] = test_df.iloc[semantic_idx]["context"].to_numpy()
+    predictions["semantic_context_cosine_similarity"] = semantic_similarity
     predictions.to_csv(REPORT_DIR / "hard_context_ablation_predictions.csv", index=False)
+
+    same_subreddit_rate = float(same_subreddit_mask.mean())
+    mean_semantic_similarity = float(semantic_similarity.mean())
 
     with open(REPORT_DIR / "hard_context_ablation_summary.txt", "w", encoding="utf-8") as f:
         f.write("Hard Context Ablation\n")
         f.write("=" * 60 + "\n\n")
         f.write("The classifier is trained once using true context + comment.\n")
         f.write("At test time only, the context is replaced with increasingly difficult wrong contexts.\n\n")
+        f.write(f"Same-subreddit match coverage: {same_subreddit_rate:.4f}\n")
+        f.write(f"Mean semantic-hard-negative cosine similarity: {mean_semantic_similarity:.4f}\n\n")
         f.write(metrics_df.to_string(index=False))
         f.write("\n\n")
         f.write("A positive bootstrap delta means true context has higher Macro-F1.\n")
         f.write("If the 95% CI stays above zero, the advantage is consistent under paired resampling.\n")
 
+    print("Same-subreddit match coverage:", round(same_subreddit_rate, 4))
+    print("Mean semantic hard-negative similarity:", round(mean_semantic_similarity, 4))
     print(metrics_df.to_string(index=False))
     print("Saved to:", REPORT_DIR)
 
