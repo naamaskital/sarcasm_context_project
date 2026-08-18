@@ -1,0 +1,7 @@
+model,input,split,n_examples,accuracy,macro_f1,sarcastic_f1
+all-MiniLM-L6-v2 + online linear classifier,comment_only,validation,101077,0.669124,0.669107,0.666766
+all-MiniLM-L6-v2 + online linear classifier,comment_only,test,101078,0.667494,0.667468,0.664511
+all-MiniLM-L6-v2 + online linear classifier,context_only,validation,101077,0.595447,0.595428,0.592618
+all-MiniLM-L6-v2 + online linear classifier,context_only,test,101078,0.591583,0.591567,0.589046
+all-MiniLM-L6-v2 + online linear classifier,dual_embeddings,validation,101077,0.674199,0.674182,0.671803
+all-MiniLM-L6-v2 + online linear classifier,dual_embeddings,test,101078,0.672065,0.672035,0.668911
