@@ -4,188 +4,168 @@ Final project for **Advanced Models of Language Understanding**.
 
 ## Research question
 
-**Does the previous Reddit message provide useful information for detecting sarcasm in a reply?**
+**Do sarcasm models actually use conversational context, or do they mainly exploit extra lexical and semantic cues?**
 
-The project compares four controlled input conditions:
+The project is designed as a sequence of controlled tests rather than a model leaderboard. It asks not only whether context changes performance, but **what kind of contextual information a model is using**.
 
-1. **Comment only** - the target Reddit reply.
-2. **Context only** - the previous message.
-3. **True context + comment** - the real conversational pair.
-4. **Random context + comment** - the same reply paired with an unrelated context.
+## Main dataset protocol
 
-The random-context condition is the key ablation: it separates a benefit from *meaningful conversational context* from a benefit caused only by adding more text.
+The main experiment now uses the original `train-balanced-sarcasm.csv` corpus from `marcbishara/sarcasm-on-reddit`.
 
-## Dataset
+- raw rows: **1,010,826**
+- usable after removing 55 missing/empty text rows: **1,010,771**
+- fixed stratified train split: **808,616**
+- validation: **101,077**
+- test: **101,078**
+- seed: **42**
 
-The text fields are:
+`src/full_dataset_utils.py` creates this deterministic 80/10/10 split once and caches it locally. All full-dataset model comparisons use the **same split**.
 
-- `comment` - target Reddit reply
-- `parent_comment` / `context` - previous Reddit message
-- `label` - binary sarcasm label
+The repository still contains a balanced 2,000-example sample for quick sanity checks and earlier pilot experiments. Those pilot results are kept for the experimental record but are not the main large-scale evaluation.
 
-Two data settings are kept separate in this repository:
+## Controlled input conditions
 
-- `data_backup/reddit_sarcasm_context_sample.csv` is a small balanced **2,000-example sample** bundled with the repository for quick sanity checks.
-- The final Qwen + LoRA experiments used the larger Hugging Face dataset `marcbishara/sarcasm-on-reddit`. The logged final split was fully balanced: **3,000 train, 500 validation, 1,000 test**.
+The project uses progressively harder controls:
 
-This distinction matters: the bundled-sample sanity run should not be compared numerically with the larger final experiments as if they were the same split.
+1. **comment only** - target reply only.
+2. **context only** - previous Reddit message only.
+3. **true context + comment** - the real conversational pair.
+4. **random context + comment** - unrelated context.
+5. **same-subreddit wrong context** - wrong context from the same community/topic environment.
+6. **semantically similar wrong context** - hard negative that looks semantically compatible but is not the true parent message.
+
+The last three conditions are designed to distinguish true conversational dependence from simply receiving more text or topically similar text.
 
 ## Methods
 
-### 1. TF-IDF + Logistic Regression
+### TF-IDF + Logistic Regression
 
-A classical lexical baseline using unigram and bigram TF-IDF features and balanced Logistic Regression. It tests how much sarcasm can be predicted from recurring lexical cues without a neural language model.
+A lexical baseline using unigrams/bigrams and balanced Logistic Regression. It tests whether recurring lexical sarcasm cues are sufficient.
 
-### 2. Sentence Transformer embeddings
+### all-MiniLM-L6-v2 + linear classifier
 
-`all-MiniLM-L6-v2` is used as a frozen semantic encoder. Experiments include joint text representations and separate context/comment embeddings followed by a classifier.
+A frozen Sentence Transformer produces normalized embeddings. `comment_only`, `context_only`, and **separate context/comment embeddings** are compared. Full-corpus embeddings are generated in chunks and stored with memmap so the experiment is practical at one-million-example scale.
 
-### 3. Qwen2.5-0.5B-Instruct + LoRA
+### Qwen2.5-0.5B-Instruct + LoRA
 
-The final language-model experiment treats Qwen as a binary sequence classifier and adapts it using LoRA rather than full fine-tuning.
+The final interaction-aware model is a binary sequence classifier adapted with LoRA:
 
-Final configuration documented by the saved training run:
+- `r=8`
+- `alpha=16`
+- `dropout=0.1`
+- target modules: `q_proj`, `v_proj`
+- learning rate: `2e-4`
+- full-data training: one complete epoch over **808,616** examples per input condition
 
-- Model: `Qwen/Qwen2.5-0.5B-Instruct`
-- LoRA rank: 8
-- LoRA alpha: 16
-- LoRA dropout: 0.1
-- Target modules: `q_proj`, `v_proj`
-- Learning rate: `2e-4`
-- Batch size: 8
-- Epochs: 5
-- Trainable parameters in the logged run: about 542K of 494.6M (~0.11%)
+The full-data script requires CUDA, saves checkpoints every 1,000 optimizer steps, supports resume, saves the final adapter, and evaluates on the complete validation/test sets.
 
-`src/qwen_lora_context_ablation.py` reconstructs this final experimental configuration and all four input conditions. The exact saved metrics from the completed run are stored in `reports/qwen_lora_ablation/qwen_lora_context_ablation_summary.csv`.
+## Completed full-dataset results
 
-## Final results
+### TF-IDF
 
-The main verified/report results are collected in `reports/final_results.csv`.
+| Input | Test Accuracy | Test Macro-F1 | Sarcastic F1 |
+|---|---:|---:|---:|
+| comment only | **0.7246** | **0.7242** | **0.7134** |
+| context only | 0.5857 | 0.5856 | 0.5819 |
+| context + comment | 0.7049 | 0.7045 | 0.6940 |
 
-| Model | Input | Accuracy | Macro-F1 | Sarcastic F1 |
-|---|---|---:|---:|---:|
-| TF-IDF + Logistic Regression | context only | 0.5425 | 0.5425 | 0.5395 |
-| TF-IDF + Logistic Regression | comment only | 0.6430 | 0.6426 | 0.6301 |
-| TF-IDF + Logistic Regression | true context + comment | 0.6500 | 0.6499 | 0.6436 |
-| Sentence Transformer, separate embeddings | true context + comment | 0.6335 | 0.6334 | 0.6380 |
-| Qwen2.5-0.5B + LoRA | context only | 0.5660 | 0.5613 | 0.6069 |
-| Qwen2.5-0.5B + LoRA | comment only | 0.6830 | 0.6830 | 0.6801 |
-| Qwen2.5-0.5B + LoRA | true context + comment | **0.6850** | **0.6850** | **0.6859** |
-| Qwen2.5-0.5B + LoRA | random context + comment | 0.6530 | 0.6528 | 0.6615 |
+A naive context concatenation **hurts** TF-IDF relative to comment-only by about 0.0197 Macro-F1.
 
-### Context ablation
+### MiniLM
 
-The most important Qwen comparison is:
+| Input | Test Accuracy | Test Macro-F1 | Sarcastic F1 |
+|---|---:|---:|---:|
+| comment only | 0.6675 | 0.6675 | 0.6645 |
+| context only | 0.5916 | 0.5916 | 0.5890 |
+| dual embeddings | **0.6721** | **0.6720** | **0.6689** |
 
-- true context + comment: Macro-F1 **0.6850**
-- random context + comment: Macro-F1 **0.6528**
+Unlike TF-IDF, keeping context and reply as separate semantic representations produces a small improvement over comment-only. This makes representation design part of the research finding: **context is not automatically useful; how it is integrated matters.**
 
-The true-context model is only slightly better than comment-only, but replacing the true context with unrelated text causes a clear drop. This supports a cautious conclusion: **the reply contains most of the predictive signal, while the correct context provides additional information that the fine-tuned Qwen model can use.**
+## Hard-context diagnostic ablation
 
-The classical and embedding experiments also show that simply adding context does not guarantee improvement. In particular, some sentence-embedding variants were relatively insensitive to whether the context was correct, suggesting that representation design matters.
+The controlled embedding experiment trains once on true context + comment and changes only the test context.
 
-### Hard context ablation
-
-A stronger controlled experiment was added to test whether the embedding-based classifier uses the exact conversational context or only broad semantic/topic compatibility. The classifier was trained once on true context + comment using a balanced 20,000-example sample, then evaluated on the same 4,000-example test set while only the context was replaced.
-
-| Test context | Accuracy | Macro-F1 | 95% paired bootstrap delta vs. true |
+| Test context | Accuracy | Macro-F1 | paired 95% bootstrap delta: true - alternative |
 |---|---:|---:|---:|
 | true context | 0.6540 | 0.6540 | - |
-| random wrong context | 0.6375 | 0.6375 | [0.0035, 0.0293] |
-| same-subreddit wrong context | 0.6390 | 0.6390 | [0.0020, 0.0290] |
-| semantically similar wrong context | 0.6540 | 0.6540 | [-0.0113, 0.0118] |
+| random wrong | 0.6375 | 0.6375 | [0.0035, 0.0293] |
+| same-subreddit wrong | 0.6390 | 0.6390 | [0.0020, 0.0290] |
+| semantically similar wrong | 0.6540 | 0.6540 | [-0.0113, 0.0118] |
 
-Same-subreddit hard negatives were available for **84.7%** of the test set. The mean cosine similarity of the semantic hard negatives was **0.4451**.
+Same-subreddit hard-negative coverage was **84.7%** and mean semantic hard-negative cosine similarity was **0.4451**.
 
-The result is intentionally nuanced: replacing the real context with random or same-subreddit context causes a statistically consistent drop in Macro-F1, but a semantically similar incorrect context performs essentially the same as the true context. This suggests that the frozen embedding classifier benefits from **semantic compatibility** between context and reply, yet does not reliably identify the exact conversational dependency. This limitation motivates stronger interaction models such as cross-encoders or fine-tuned LLMs.
+The nuanced finding is important: the embedding classifier distinguishes true context from random and same-community context, but **not from a semantically similar incorrect context**. It therefore appears to exploit semantic compatibility without reliably modeling the exact conversational dependency.
 
-Detailed results are stored under `reports/hard_context_ablation/`, and the experiment is implemented in `scripts/16_hard_context_ablation.py`.
+## Qwen full-dataset status
 
-## Reproducing the project
+The full-dataset Qwen code is complete; only GPU execution remains.
 
-Create an environment and install dependencies:
+Expected final comparison:
+
+| Input | Train | Validation | Test | Test Macro-F1 |
+|---|---:|---:|---:|---:|
+| comment only | 808,616 | 101,077 | 101,078 | pending GPU |
+| true context + comment | 808,616 | 101,077 | 101,078 | pending GPU |
+
+After the context-trained adapter is produced, `scripts/21_full_dataset_qwen_context_ablation.py` evaluates the **same trained model** on true, random, and same-subreddit test contexts and reports paired bootstrap confidence intervals plus context-sensitivity counts. No additional Qwen training is needed for the ablation.
+
+The semantic-nearest hard-negative condition remains the focused diagnostic experiment in `scripts/16_hard_context_ablation.py`; an exact all-pairs search is intentionally not expanded to all 101k test contexts.
+
+## Reproduction
+
+Install dependencies:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate          # Linux / macOS
-# .venv\Scripts\activate         # Windows
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Quick bundled-sample baseline
+Create the fixed split:
 
 ```bash
-python src/context_control_experiment.py
+python src/full_dataset_utils.py
 ```
 
-This automatically uses `data_backup/reddit_sarcasm_context_sample.csv` when no `data/` copy exists and writes results to `reports/sample_baseline/`.
-
-### Sentence Transformer experiment
+Run completed CPU experiments:
 
 ```bash
-python src/sentence_transformer_experiment.py
+python scripts/18_full_dataset_tfidf.py
+python scripts/19_full_dataset_embeddings.py
 ```
 
-Additional embedding analyses are under `scripts/`.
-
-### Hard context ablation
+On a CUDA machine, run the final Qwen experiments:
 
 ```bash
-python scripts/16_hard_context_ablation.py
+python scripts/20_full_dataset_qwen.py --mode comment_only --resume
+python scripts/20_full_dataset_qwen.py --mode context_plus_comment --resume
+python scripts/21_full_dataset_qwen_context_ablation.py
+python scripts/22_collect_final_results.py
 ```
 
-This experiment trains once on true context + comment and replaces only the test context with random, same-subreddit, and semantically similar hard negatives. It also reports paired 95% bootstrap confidence intervals.
+See **`GPU_RUN.md`** for the exact end-to-end GPU workflow, checkpoint/resume behavior, and expected artifacts.
 
-### Final Qwen + LoRA ablation
-
-```bash
-python src/qwen_lora_context_ablation.py
-```
-
-This experiment downloads the Hugging Face dataset and Qwen checkpoint. A CUDA-capable GPU is strongly recommended. Outputs are written to `reports/qwen_lora_ablation/` and checkpoints to `models/qwen_lora_ablation/`.
-
-### Exploratory Qwen experiments
-
-The repository also keeps earlier zero-shot, few-shot, model-size, and preliminary LoRA scripts for the experimental record. They are useful for showing the development process, but the final Qwen result reported above is the five-epoch LoRA context-ablation experiment.
-
-## Repository structure
+## Key files
 
 ```text
-.
-├── data_backup/
-│   └── reddit_sarcasm_context_sample.csv
-├── reports/
-│   ├── final_results.csv
-│   ├── hard_context_ablation/
-│   │   ├── hard_context_ablation_metrics.csv
-│   │   └── hard_context_ablation_summary.txt
-│   └── qwen_lora_ablation/
-│       └── qwen_lora_context_ablation_summary.csv
-├── reports_backup/                 # earlier experiment outputs
-├── scripts/
-│   ├── 13_train_contrast_features.py
-│   ├── 14_train_dual_embeddings.py
-│   ├── 15_ablation_embedding_inputs.py
-│   └── 16_hard_context_ablation.py
-├── src/
-│   ├── context_control_experiment.py
-│   ├── sentence_transformer_experiment.py
-│   ├── qwen_zero_shot_experiment.py
-│   ├── qwen_size_comparison_experiment.py
-│   ├── qwen_lora_experiment.py     # earlier LoRA version
-│   └── qwen_lora_context_ablation.py
-├── requirements.txt
-└── README.md
+src/full_dataset_utils.py                       fixed 1.01M-example split
+scripts/18_full_dataset_tfidf.py               full-data lexical baseline
+scripts/19_full_dataset_embeddings.py          full-data MiniLM experiment
+scripts/20_full_dataset_qwen.py                 resumable full-data Qwen + LoRA
+scripts/21_full_dataset_qwen_context_ablation.py post-training Qwen ablation
+scripts/22_collect_final_results.py             combined final results table
+scripts/16_hard_context_ablation.py             semantic hard-negative diagnostic
+GPU_RUN.md                                      final GPU execution guide
 ```
 
-## Main conclusions
+## Main conclusions so far
 
-- **Context alone is weak**: the previous message is not a reliable sarcasm label by itself.
-- **The reply is the main source of signal**: comment-only is already substantially stronger.
-- **True context can add useful information**, but the gain over comment-only is modest.
-- **Random-context ablation is essential**: for Qwen, unrelated context reduces performance substantially compared with the true conversational context.
-- **Hard-negative analysis reveals a limitation**: the embedding classifier distinguishes true context from random and same-community context, but not from semantically similar incorrect context.
-- **A larger or more semantic model is not automatically better**: representation choices affect whether a model actually uses conversational relationships rather than topical similarity.
+- **The reply is the main source of signal.** Context-only is weak across methods.
+- **More text is not automatically better.** Naive context concatenation hurts TF-IDF.
+- **Representation matters.** Separate MiniLM context/reply embeddings yield a small improvement.
+- **A sophisticated encoder is not automatically superior.** TF-IDF remains stronger than the frozen MiniLM classifier on the full test set.
+- **Context-aware performance can be misleading.** The embedding model is robust to a semantically similar but incorrect context, suggesting semantic compatibility rather than exact conversational understanding.
+- The final Qwen experiment is designed specifically to test whether token-level interaction reduces this failure mode.
 
 ## References
 
