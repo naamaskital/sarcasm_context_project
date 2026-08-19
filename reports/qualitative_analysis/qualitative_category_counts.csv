@@ -1,0 +1,10 @@
+category,model,count
+tfidf_context_helped,TF-IDF,9652
+tfidf_context_hurt,TF-IDF,11646
+minilm_context_helped,MiniLM,4361
+minilm_context_hurt,MiniLM,3899
+representation_matters_tfidf_hurt_minilm_helped,TF-IDF vs MiniLM,417
+hard_negative_random_true_to_wrong,MiniLM hard-context diagnostic,378
+hard_negative_same_subreddit_true_to_wrong,MiniLM hard-context diagnostic,360
+hard_negative_semantic_similar_true_to_wrong,MiniLM hard-context diagnostic,264
+semantic_wrong_context_prediction_unchanged,MiniLM hard-context diagnostic,2352
