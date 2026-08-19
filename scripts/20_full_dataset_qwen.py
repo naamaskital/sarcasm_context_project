@@ -28,12 +28,19 @@ REPORT_DIR = Path("reports/full_dataset/qwen")
 MODEL_DIR = Path("models/full_dataset_qwen")
 
 
+def require_cuda():
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA is not available. Full-dataset Qwen training is intentionally disabled on CPU. "
+            "Check nvidia-smi and install a CUDA-enabled PyTorch build before running this script."
+        )
+
+
 def set_seed(seed=SEED):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def build_text(row, mode):
@@ -90,7 +97,7 @@ def train_mode(train_df, val_df, test_df, mode):
     model = AutoModelForSequenceClassification.from_pretrained(
         MODEL_ID,
         num_labels=2,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        dtype=torch.float16,
     )
     model.config.pad_token_id = tokenizer.pad_token_id
     model.config.use_cache = False
@@ -124,9 +131,10 @@ def train_mode(train_df, val_df, test_df, mode):
         seed=SEED,
         data_seed=SEED,
         report_to="none",
-        fp16=torch.cuda.is_available(),
+        fp16=True,
         gradient_checkpointing=True,
         dataloader_num_workers=2,
+        dataloader_pin_memory=True,
     )
 
     trainer = Trainer(
@@ -147,20 +155,20 @@ def train_mode(train_df, val_df, test_df, mode):
     predictions.to_parquet(REPORT_DIR / f"{mode}_test_predictions.parquet", index=False)
 
     del trainer, model, train_ds, val_ds, test_ds
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    torch.cuda.empty_cache()
 
     return metrics
 
 
 def main():
+    require_cuda()
     set_seed()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
     print("CUDA available:", torch.cuda.is_available())
-    if torch.cuda.is_available():
-        print("GPU:", torch.cuda.get_device_name(0))
+    print("GPU:", torch.cuda.get_device_name(0))
+    print("PyTorch CUDA build:", torch.version.cuda)
 
     train_df, val_df, test_df = load_or_create_splits()
     print("Full-data split sizes:", len(train_df), len(val_df), len(test_df))
