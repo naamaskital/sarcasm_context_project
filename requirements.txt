@@ -1,9 +1,11 @@
 numpy
 pandas
+pyarrow
 scikit-learn
 sentence-transformers
 torch
 transformers
 datasets
+huggingface_hub
 peft
 accelerate
