@@ -96,6 +96,36 @@ Same-subreddit hard-negative coverage was **84.7%** and mean semantic hard-negat
 
 The nuanced finding is important: the embedding classifier distinguishes true context from random and same-community context, but **not from a semantically similar incorrect context**. It therefore appears to exploit semantic compatibility without reliably modeling the exact conversational dependency.
 
+## Qualitative error analysis
+
+`scripts/23_qualitative_error_analysis.py` turns the saved test predictions into reproducible qualitative categories. The examples are not manually cherry-picked: examples are first selected by a fixed outcome criterion and then deterministically sampled with a fixed seed. Deleted/empty and extremely short/long texts are filtered only for readability.
+
+The analysis includes:
+
+- **TF-IDF context helped**: comment-only is wrong while context+comment is correct.
+- **TF-IDF context hurt**: comment-only is correct while context+comment is wrong.
+- **MiniLM context helped / hurt** using comment-only vs separate dual embeddings.
+- **Representation-matters cases** where naive TF-IDF context hurts on the same example where MiniLM's separate context representation helps.
+- **Hard-negative failures**, including cases where true context is correct but a random, same-subreddit, or semantically similar wrong context changes the result.
+- **Semantically similar wrong context with unchanged prediction**, which helps illustrate the limitation revealed by the hard-negative aggregate metrics.
+- After the GPU run, the same script automatically adds **Qwen context helped / hurt** and Qwen hard-context cases when those prediction files exist.
+
+Run it with:
+
+```bash
+python scripts/23_qualitative_error_analysis.py
+```
+
+Outputs:
+
+```text
+reports/qualitative_analysis/qualitative_category_counts.csv
+reports/qualitative_analysis/selected_qualitative_examples.csv
+reports/qualitative_analysis/qualitative_analysis_summary.txt
+```
+
+The category-count file quantifies how often each qualitative pattern occurs; the selected-examples file is intended for a small report table and targeted manual interpretation.
+
 ## Qwen full-dataset status
 
 The full-dataset Qwen code is complete; only GPU execution remains.
@@ -132,6 +162,7 @@ Run completed CPU experiments:
 ```bash
 python scripts/18_full_dataset_tfidf.py
 python scripts/19_full_dataset_embeddings.py
+python scripts/23_qualitative_error_analysis.py
 ```
 
 On a CUDA machine, run the final Qwen experiments:
@@ -141,6 +172,7 @@ python scripts/20_full_dataset_qwen.py --mode comment_only --resume
 python scripts/20_full_dataset_qwen.py --mode context_plus_comment --resume
 python scripts/21_full_dataset_qwen_context_ablation.py
 python scripts/22_collect_final_results.py
+python scripts/23_qualitative_error_analysis.py
 ```
 
 See **`GPU_RUN.md`** for the exact end-to-end GPU workflow, checkpoint/resume behavior, and expected artifacts.
@@ -148,14 +180,15 @@ See **`GPU_RUN.md`** for the exact end-to-end GPU workflow, checkpoint/resume be
 ## Key files
 
 ```text
-src/full_dataset_utils.py                       fixed 1.01M-example split
-scripts/18_full_dataset_tfidf.py               full-data lexical baseline
-scripts/19_full_dataset_embeddings.py          full-data MiniLM experiment
+src/full_dataset_utils.py                        fixed 1.01M-example split
+scripts/18_full_dataset_tfidf.py                full-data lexical baseline
+scripts/19_full_dataset_embeddings.py           full-data MiniLM experiment
 scripts/20_full_dataset_qwen.py                 resumable full-data Qwen + LoRA
 scripts/21_full_dataset_qwen_context_ablation.py post-training Qwen ablation
-scripts/22_collect_final_results.py             combined final results table
-scripts/16_hard_context_ablation.py             semantic hard-negative diagnostic
-GPU_RUN.md                                      final GPU execution guide
+scripts/22_collect_final_results.py              combined final results table
+scripts/23_qualitative_error_analysis.py         reproducible helped/hurt example analysis
+scripts/16_hard_context_ablation.py              semantic hard-negative diagnostic
+GPU_RUN.md                                       final GPU execution guide
 ```
 
 ## Main conclusions so far
