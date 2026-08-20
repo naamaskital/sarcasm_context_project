@@ -1,67 +1,75 @@
-# Sarcasm Detection with Conversational Context
+# Sarcasm Detection in the Context Test
 
 Final project for **Advanced Models of Language Understanding**.
 
-## Research question
+## Project idea
 
-**Do sarcasm models actually use conversational context, or do they mainly exploit extra lexical and semantic cues?**
+The project began with a simple question presented in class:
 
-The project is designed as a sequence of controlled tests rather than a model leaderboard. It asks not only whether context changes performance, but **what kind of contextual information a model is using**.
+> **Does conversational context improve sarcasm detection in Reddit replies?**
 
-## Main dataset protocol
+The original controlled setup compared:
 
-The main experiment now uses the original `train-balanced-sarcasm.csv` corpus from `marcbishara/sarcasm-on-reddit`.
+1. `Comment Only`
+2. `Context Only`
+3. `Context + Comment`
+
+The final project keeps this original question, but develops it into a hypothesis-driven research process:
+
+> **Do language models genuinely exploit the conversational relation between a Reddit context and its reply, or do they mainly exploit lexical, semantic, model-size, or community-specific shortcuts?**
+
+The repository is deliberately organized as a sequence of **hypothesis -> experiment -> result/error analysis -> new hypothesis -> targeted follow-up** rather than as a model leaderboard.
+
+See:
+
+- `PROJECT_FLOW.md` - the complete research story.
+- `COURSE_ALIGNMENT.md` - how each experiment connects to the class presentation, lecturer feedback, and course concepts.
+- `GPU_RUN.md` - exact remaining execution order.
+
+---
+
+## Data and evaluation protocols
+
+The project uses the original SARC Reddit sarcasm corpus (`train-balanced-sarcasm.csv`).
+
+### Main IID protocol
 
 - raw rows: **1,010,826**
-- usable after removing 55 missing/empty text rows: **1,010,771**
-- fixed stratified train split: **808,616**
+- usable after removing 55 missing/empty rows: **1,010,771**
+- train: **808,616**
 - validation: **101,077**
 - test: **101,078**
-- seed: **42**
+- deterministic seed: **42**
 
-`src/full_dataset_utils.py` creates this deterministic 80/10/10 split once and caches it locally. All full-dataset model comparisons use the **same split**.
+`src/full_dataset_utils.py` creates the same stratified 80/10/10 split for every full-data method.
 
-The repository still contains a balanced 2,000-example sample for quick sanity checks and earlier pilot experiments. Those pilot results are kept for the experimental record but are not the main large-scale evaluation.
+### Unseen-community protocol
 
-## Controlled input conditions
+`src/subreddit_generalization_utils.py` creates a second benchmark in which train, validation, and test contain **disjoint sets of subreddits**.
 
-The project uses progressively harder controls:
+This directly tests whether a model learned sarcasm/context behavior or Reddit-community shortcuts.
 
-1. **comment only** - target reply only.
-2. **context only** - previous Reddit message only.
-3. **true context + comment** - the real conversational pair.
-4. **random context + comment** - unrelated context.
-5. **same-subreddit wrong context** - wrong context from the same community/topic environment.
-6. **semantically similar wrong context** - hard negative that looks semantically compatible but is not the true parent message.
+---
 
-The last three conditions are designed to distinguish true conversational dependence from simply receiving more text or topically similar text.
+# Research flow
 
-## Methods
+## Stage 1 - Is the reply itself enough?
 
-### TF-IDF + Logistic Regression
+### Hypothesis
+Many sarcastic replies may contain strong lexical cues, so context may not always be necessary.
 
-A lexical baseline using unigrams/bigrams and balanced Logistic Regression. It tests whether recurring lexical sarcasm cues are sufficient.
+### Methods
+- TF-IDF + Logistic Regression
+- all-MiniLM-L6-v2 frozen embeddings + linear classifier
 
-### all-MiniLM-L6-v2 + linear classifier
+### Controlled inputs
+- comment only
+- context only
+- context + comment / dual embeddings
 
-A frozen Sentence Transformer produces normalized embeddings. `comment_only`, `context_only`, and **separate context/comment embeddings** are compared. Full-corpus embeddings are generated in chunks and stored with memmap so the experiment is practical at one-million-example scale.
+### Full-data results already completed
 
-### Qwen2.5-0.5B-Instruct + LoRA
-
-The final interaction-aware model is a binary sequence classifier adapted with LoRA:
-
-- `r=8`
-- `alpha=16`
-- `dropout=0.1`
-- target modules: `q_proj`, `v_proj`
-- learning rate: `2e-4`
-- full-data training: one complete epoch over **808,616** examples per input condition
-
-The full-data script requires CUDA, saves checkpoints every 1,000 optimizer steps, supports resume, saves the final adapter, and evaluates on the complete validation/test sets.
-
-## Completed full-dataset results
-
-### TF-IDF
+#### TF-IDF
 
 | Input | Test Accuracy | Test Macro-F1 | Sarcastic F1 |
 |---|---:|---:|---:|
@@ -69,9 +77,9 @@ The full-data script requires CUDA, saves checkpoints every 1,000 optimizer step
 | context only | 0.5857 | 0.5856 | 0.5819 |
 | context + comment | 0.7049 | 0.7045 | 0.6940 |
 
-A naive context concatenation **hurts** TF-IDF relative to comment-only by about 0.0197 Macro-F1.
+**Finding:** naive addition of context hurts TF-IDF by about **0.0197 Macro-F1**.
 
-### MiniLM
+#### MiniLM
 
 | Input | Test Accuracy | Test Macro-F1 | Sarcastic F1 |
 |---|---:|---:|---:|
@@ -79,11 +87,93 @@ A naive context concatenation **hurts** TF-IDF relative to comment-only by about
 | context only | 0.5916 | 0.5916 | 0.5890 |
 | dual embeddings | **0.6721** | **0.6720** | **0.6689** |
 
-Unlike TF-IDF, keeping context and reply as separate semantic representations produces a small improvement over comment-only. This makes representation design part of the research finding: **context is not automatically useful; how it is integrated matters.**
+**Finding:** keeping context and reply as separate semantic representations gives a small improvement.
 
-## Hard-context diagnostic ablation
+### New hypothesis generated by the result
 
-The controlled embedding experiment trains once on true context + comment and changes only the test context.
+Context is not automatically helpful. Its usefulness may depend on **how the two text fields are represented and allowed to interact**.
+
+---
+
+## Stage 2 - Can failure analysis suggest a better representation?
+
+### Failure pattern A: TF-IDF dilution
+
+Qualitative analysis found examples where a short sarcastic reply is correctly classified alone, but a long parent message introduces many irrelevant lexical features and flips the prediction.
+
+### Targeted fix
+
+`scripts/28_field_aware_tfidf.py`
+
+Instead of naive concatenation, context and reply receive separate TF-IDF feature spaces and the context contribution is weighted. The context weight is selected on validation only and evaluated once on test.
+
+Research question:
+
+> Was TF-IDF harmed because context is useless, or because naive concatenation is the wrong integration strategy?
+
+### Failure pattern B: context helps only some examples
+
+Full-test helped/hurt analysis shows context is useful for some examples and harmful for others.
+
+### Targeted fix
+
+`scripts/29_selective_context_routing.py`
+
+A validation-tuned router uses the context-aware classifier only when the comment-only model is uncertain.
+
+Research question:
+
+> Can behavioral analysis tell us **when** context should be used rather than forcing it into every prediction?
+
+---
+
+## Stage 3 - Separate embeddings vs joint token interaction
+
+### Hypothesis
+Frozen separate embeddings may capture topical/semantic compatibility without representing the exact relation between the two messages.
+
+### Encoder progression
+
+- **MiniLM frozen encoder** - separate sentence representations
+- **BERT-base cross-encoder** - fine-tuned encoder-only Transformer with joint context/reply token interaction
+- **RoBERTa-base cross-encoder** - stronger encoder-only variant under the same protocol
+
+Scripts:
+
+```text
+scripts/19_full_dataset_embeddings.py
+scripts/30_bert_cross_encoder.py
+scripts/27_roberta_cross_encoder.py
+```
+
+BERT and RoBERTa use all three original class-presentation conditions:
+
+- comment only
+- context only
+- context + comment
+
+The combined condition is encoded as a true sentence pair, allowing self-attention to model token-level relations between parent message and reply.
+
+Research question:
+
+> Does joint bidirectional interaction solve failures that remain with separate frozen embeddings?
+
+---
+
+## Stage 4 - Does the model need the *true* conversational context?
+
+A model can appear context-aware while merely benefiting from more semantically related text. Therefore the project progressively replaces the true parent message with harder counterfactual controls.
+
+### Context controls
+
+1. true context
+2. random wrong context
+3. same-subreddit wrong context
+4. semantically similar but wrong context
+
+### Completed hard-context diagnostic
+
+The MiniLM-based diagnostic trains once on true context + reply and changes only the test context.
 
 | Test context | Accuracy | Macro-F1 | paired 95% bootstrap delta: true - alternative |
 |---|---:|---:|---:|
@@ -92,116 +182,282 @@ The controlled embedding experiment trains once on true context + comment and ch
 | same-subreddit wrong | 0.6390 | 0.6390 | [0.0020, 0.0290] |
 | semantically similar wrong | 0.6540 | 0.6540 | [-0.0113, 0.0118] |
 
-Same-subreddit hard-negative coverage was **84.7%** and mean semantic hard-negative cosine similarity was **0.4451**.
+**Finding:** the embedding classifier distinguishes true context from random and same-community context, but not from a semantically similar incorrect context.
 
-The nuanced finding is important: the embedding classifier distinguishes true context from random and same-community context, but **not from a semantically similar incorrect context**. It therefore appears to exploit semantic compatibility without reliably modeling the exact conversational dependency.
+### New hypothesis
 
-## Qualitative error analysis
+Separate sentence embeddings may learn **semantic compatibility** rather than the exact conversational dependency.
 
-`scripts/23_qualitative_error_analysis.py` turns the saved test predictions into reproducible qualitative categories. The examples are not manually cherry-picked: examples are first selected by a fixed outcome criterion and then deterministically sampled with a fixed seed. Deleted/empty and extremely short/long texts are filtered only for readability.
+This motivates joint cross-encoders and Qwen.
 
-The analysis includes:
+---
 
-- **TF-IDF context helped**: comment-only is wrong while context+comment is correct.
-- **TF-IDF context hurt**: comment-only is correct while context+comment is wrong.
-- **MiniLM context helped / hurt** using comment-only vs separate dual embeddings.
-- **Representation-matters cases** where naive TF-IDF context hurts on the same example where MiniLM's separate context representation helps.
-- **Hard-negative failures**, including cases where true context is correct but a random, same-subreddit, or semantically similar wrong context changes the result.
-- **Semantically similar wrong context with unchanged prediction**, which helps illustrate the limitation revealed by the hard-negative aggregate metrics.
-- After the GPU run, the same script automatically adds **Qwen context helped / hurt** and Qwen hard-context cases when those prediction files exist.
+## Stage 5 - Modern decoder model + PEFT
 
-Run it with:
+### Model
 
-```bash
-python scripts/23_qualitative_error_analysis.py
-```
+**Qwen2.5-0.5B-Instruct + LoRA**
 
-Outputs:
+- LoRA `r=8`
+- alpha `16`
+- dropout `0.1`
+- target modules: `q_proj`, `v_proj`
+- learning rate `2e-4`
+- one full epoch over **808,616** training examples per input condition
+
+`scripts/20_full_dataset_qwen.py` trains:
+
+- comment only
+- context only
+- context + comment
+
+It saves checkpoints, supports resume, and stores both predictions and `P(sarcastic)`.
+
+### Post-training Qwen counterfactual test
+
+`scripts/21_full_dataset_qwen_context_ablation.py` evaluates the same trained context model on:
+
+- true context
+- random context
+- same-subreddit wrong context
+
+and computes paired bootstrap confidence intervals plus changed-prediction statistics.
+
+Research question:
+
+> Does an interaction-aware decoder show stronger dependence on the correct conversational relation than frozen encoders?
+
+---
+
+## Stage 6 - Does scale improve context utilization?
+
+The lecturer suggested comparing modern GPT-style model sizes. Instead of treating this as a simple accuracy comparison, the project turns scaling into a research question.
+
+`scripts/24_qwen_basic_controls.py` compares:
+
+- Qwen2.5-0.5B-Instruct
+- Qwen2.5-1.5B-Instruct
+
+under identical few-shot conditions:
+
+- comment only
+- true context + comment
+- random context + comment
+
+Primary quantities:
 
 ```text
-reports/qualitative_analysis/qualitative_category_counts.csv
-reports/qualitative_analysis/selected_qualitative_examples.csv
-reports/qualitative_analysis/qualitative_analysis_summary.txt
+ContextGain = MacroF1(true context) - MacroF1(comment only)
+ContextSensitivity = MacroF1(true context) - MacroF1(random context)
 ```
 
-The category-count file quantifies how often each qualitative pattern occurs; the selected-examples file is intended for a small report table and targeted manual interpretation.
+Research question:
 
-## Qwen full-dataset status
+> **Does model scale improve the ability to exploit conversational relationships, not merely overall accuracy?**
 
-The full-dataset Qwen code is complete; only GPU execution remains.
+The same script also performs the prompt-formatting control proposed in the class presentation: structured `Previous Reddit message:` / `Reply:` fields versus plain concatenation.
 
-Expected final comparison:
+---
 
-| Input | Train | Validation | Test | Test Macro-F1 |
-|---|---:|---:|---:|---:|
-| comment only | 808,616 | 101,077 | 101,078 | pending GPU |
-| true context + comment | 808,616 | 101,077 | 101,078 | pending GPU |
+## Stage 7 - Task learning or dataset learning?
 
-After the context-trained adapter is produced, `scripts/21_full_dataset_qwen_context_ablation.py` evaluates the **same trained model** on true, random, and same-subreddit test contexts and reports paired bootstrap confidence intervals plus context-sensitivity counts. No additional Qwen training is needed for the ablation.
+The course discusses good benchmarks and the distinction between learning the task and learning the dataset.
 
-The semantic-nearest hard-negative condition remains the focused diagnostic experiment in `scripts/16_hard_context_ablation.py`; an exact all-pairs search is intentionally not expanded to all 101k test contexts.
+### Hypothesis
+Random IID splits may allow models to exploit subreddit/community-specific shortcuts.
 
-## Reproduction
+### Experiment
 
-Install dependencies:
+`scripts/25_unseen_subreddit_generalization.py`
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+Training and testing occur on **different subreddits**. It compares comment-only and context-aware methods for TF-IDF and MiniLM.
+
+Primary quantity:
+
+```text
+ContextGain_unseen = MacroF1(context-aware) - MacroF1(comment-only)
 ```
 
-Create the fixed split:
+The result is compared with the IID context gain.
+
+Research question:
+
+> Does context generalize better than reply-only shortcuts when the model is evaluated on communities it never saw during training?
+
+---
+
+## Stage 8 - Behavioral interpretability: when does context matter?
+
+The project does not stop at average F1.
+
+`scripts/26_behavioral_context_interpretability.py` analyzes per-example probability shifts:
+
+```text
+DeltaP_comment_to_true
+DeltaP_true_to_random
+DeltaP_true_to_same_subreddit
+```
+
+Examples are categorized as:
+
+- context helped
+- context hurt
+- context irrelevant
+- context sensitive
+- other
+
+The groups are characterized using:
+
+- comment length
+- context length
+- context/reply semantic similarity
+- explicit sarcasm marker `/s`
+- subreddit
+
+This connects directly to behavioral interpretability and task-heuristic analysis.
+
+---
+
+## Stage 9 - Qualitative evidence
+
+`scripts/23_qualitative_error_analysis.py` produces reproducible example categories rather than manually cherry-picking from the whole test set.
+
+Current full-test counts include:
+
+- TF-IDF context helped: **9,652**
+- TF-IDF context hurt: **11,646**
+- MiniLM context helped: **4,361**
+- MiniLM context hurt: **3,899**
+- TF-IDF hurt while MiniLM helped on the same example: **417**
+
+Hard-negative diagnostics additionally expose examples where replacing the true parent message changes a previously correct prediction.
+
+Curated interpretable examples are stored in:
+
+```text
+reports/qualitative_analysis/curated_examples.md
+```
+
+The qualitative evidence is used to generate new hypotheses and targeted follow-up experiments, not as a substitute for aggregate results.
+
+---
+
+# Model families and their research role
+
+| Method | Architecture / adaptation | Why it is included |
+|---|---|---|
+| TF-IDF + LR | lexical baseline | establishes whether simple reply cues dominate |
+| Field-aware TF-IDF | separate lexical fields | tests a failure-derived fix for naive concatenation |
+| MiniLM + linear head | frozen encoder representation | tests semantic representations without fine-tuning |
+| BERT-base | fine-tuned encoder-only cross-encoder | canonical Masked-LM encoder from the course; joint token interaction |
+| RoBERTa-base | fine-tuned encoder-only cross-encoder | stronger encoder comparison under same protocol |
+| Qwen2.5-0.5B + LoRA | decoder-only + PEFT | modern GPT-style interaction-aware model |
+| Qwen2.5-1.5B | decoder-only scaling control | tests whether scale increases context utilization |
+| Selective routing | behavior-driven decision rule | tests whether failure analysis can improve when context is used |
+
+The purpose is not to maximize the number of models; each method tests a distinct hypothesis generated by the research process.
+
+---
+
+# Course concepts used naturally in the project
+
+- lexical vs contextual representations
+- Transformer self-attention
+- encoder-only / Masked-LM models: BERT and RoBERTa
+- decoder-only / GPT-style models: Qwen
+- effect of model scale
+- zero/few-shot prompting
+- classification evaluation and benchmark design
+- task learning vs dataset learning
+- PEFT / LoRA
+- behavioral interpretability and counterfactual analysis
+
+Unrelated topics such as RAG, RLHF, agents, or decoding-strategy comparisons are intentionally excluded because they do not answer the project's sarcasm/context research questions.
+
+---
+
+# Reproduction and experiment order
+
+## CPU / non-Qwen work
 
 ```bash
 python src/full_dataset_utils.py
-```
-
-Run completed CPU experiments:
-
-```bash
+python src/subreddit_generalization_utils.py
 python scripts/18_full_dataset_tfidf.py
 python scripts/19_full_dataset_embeddings.py
+python scripts/25_unseen_subreddit_generalization.py
+python scripts/28_field_aware_tfidf.py
+python scripts/29_selective_context_routing.py
 python scripts/23_qualitative_error_analysis.py
 ```
 
-On a CUDA machine, run the final Qwen experiments:
+## GPU work
 
 ```bash
-python scripts/20_full_dataset_qwen.py --mode comment_only --resume
-python scripts/20_full_dataset_qwen.py --mode context_plus_comment --resume
+python scripts/24_qwen_basic_controls.py
+
+python scripts/30_bert_cross_encoder.py --mode all --resume
+python scripts/27_roberta_cross_encoder.py --mode all --resume
+
+python scripts/20_full_dataset_qwen.py --mode all --resume --skip-completed
 python scripts/21_full_dataset_qwen_context_ablation.py
-python scripts/22_collect_final_results.py
+
+python scripts/26_behavioral_context_interpretability.py
 python scripts/23_qualitative_error_analysis.py
+python scripts/22_collect_final_results.py
 ```
 
-See **`GPU_RUN.md`** for the exact end-to-end GPU workflow, checkpoint/resume behavior, and expected artifacts.
+See `GPU_RUN.md` for detailed execution/checkpoint instructions.
 
-## Key files
+---
+
+# Repository map
 
 ```text
-src/full_dataset_utils.py                        fixed 1.01M-example split
-scripts/18_full_dataset_tfidf.py                full-data lexical baseline
-scripts/19_full_dataset_embeddings.py           full-data MiniLM experiment
-scripts/20_full_dataset_qwen.py                 resumable full-data Qwen + LoRA
-scripts/21_full_dataset_qwen_context_ablation.py post-training Qwen ablation
-scripts/22_collect_final_results.py              combined final results table
-scripts/23_qualitative_error_analysis.py         reproducible helped/hurt example analysis
-scripts/16_hard_context_ablation.py              semantic hard-negative diagnostic
-GPU_RUN.md                                       final GPU execution guide
+README.md                                      project overview and findings
+PROJECT_FLOW.md                               hypothesis-driven research narrative
+COURSE_ALIGNMENT.md                           mapping to presentation, lecturer feedback, and syllabus
+RESEARCH_EXTENSIONS.md                        pre-specified advanced hypotheses
+GPU_RUN.md                                    remaining GPU workflow
+
+src/full_dataset_utils.py                     deterministic full-corpus IID split
+src/subreddit_generalization_utils.py         subreddit-disjoint benchmark split
+
+scripts/18_full_dataset_tfidf.py              full-data lexical baseline
+scripts/19_full_dataset_embeddings.py         full-data frozen MiniLM experiment
+scripts/20_full_dataset_qwen.py               full-data Qwen + LoRA, 3 input conditions
+scripts/21_full_dataset_qwen_context_ablation.py Qwen counterfactual context evaluation
+scripts/23_qualitative_error_analysis.py       helped/hurt and example analysis
+scripts/24_qwen_basic_controls.py             scale, context utilization, prompt formatting
+scripts/25_unseen_subreddit_generalization.py  Task-vs-Dataset generalization experiment
+scripts/26_behavioral_context_interpretability.py probability-level interpretability
+scripts/27_roberta_cross_encoder.py            RoBERTa joint encoder experiment
+scripts/28_field_aware_tfidf.py                failure-driven lexical integration fix
+scripts/29_selective_context_routing.py         failure-driven selective context solution
+scripts/30_bert_cross_encoder.py               canonical BERT joint encoder experiment
+scripts/16_hard_context_ablation.py             semantic hard-negative diagnostic
 ```
 
-## Main conclusions so far
+Earlier pilot scripts and reports remain in the repository as an experimental record, but the numbered full-data pipeline above defines the final project.
 
-- **The reply is the main source of signal.** Context-only is weak across methods.
-- **More text is not automatically better.** Naive context concatenation hurts TF-IDF.
-- **Representation matters.** Separate MiniLM context/reply embeddings yield a small improvement.
-- **A sophisticated encoder is not automatically superior.** TF-IDF remains stronger than the frozen MiniLM classifier on the full test set.
-- **Context-aware performance can be misleading.** The embedding model is robust to a semantically similar but incorrect context, suggesting semantic compatibility rather than exact conversational understanding.
-- The final Qwen experiment is designed specifically to test whether token-level interaction reduces this failure mode.
+---
+
+# Current conclusions before the remaining GPU runs
+
+1. **The reply is the strongest individual signal.** Context-only is much weaker.
+2. **More text is not automatically better.** Naive context concatenation hurts TF-IDF.
+3. **Representation matters.** Separate MiniLM representations improve slightly over comment-only.
+4. **Context-aware scores do not prove genuine context use.** Semantic hard negatives expose shortcut behavior.
+5. These findings motivate joint cross-encoding, modern decoder models, scaling-as-context-utilization, unseen-community evaluation, and behavioral interpretability.
+
+The remaining GPU results are designed to confirm, refine, or reject these hypotheses rather than simply add more leaderboard rows.
+
+---
 
 ## References
 
 - Khodak, M., Saunshi, N., & Vodrahalli, K. (2018). *A Large Self-Annotated Corpus for Sarcasm*. LREC.
 - Hazarika, D., Poria, S., Gorantla, S., Cambria, E., Zimmermann, R., & Mihalcea, R. (2018). *CASCADE: Contextual Sarcasm Detection in Online Discussion Forums*. COLING.
+- Devlin, J. et al. (2019). *BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding*. NAACL.
+- Liu, Y. et al. (2019). *RoBERTa: A Robustly Optimized BERT Pretraining Approach*.
 - Hu, E. J. et al. (2022). *LoRA: Low-Rank Adaptation of Large Language Models*. ICLR.
