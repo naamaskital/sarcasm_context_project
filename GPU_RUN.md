@@ -11,12 +11,16 @@ git switch agent/full-dataset
 git pull
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install --upgrade pip setuptools wheel --timeout 300 --retries 20
+python -m pip install -r requirements.txt --timeout 300 --retries 20
 ```
+
+The longer timeout/retry settings are intentional because PyTorch/Transformers dependencies and model packages can be large. If a download times out, rerun the same install command; already completed packages do not need to be reinstalled.
 
 Verify CUDA:
 
 ```bash
+nvidia-smi
 python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO CUDA')"
 ```
 
