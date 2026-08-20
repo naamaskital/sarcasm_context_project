@@ -29,15 +29,16 @@ GRAD_ACCUM_STEPS = 4
 LEARNING_RATE = 2e-4
 REPORT_DIR = ROOT / "reports" / "full_dataset" / "qwen"
 MODEL_DIR = ROOT / "models" / "full_dataset_qwen"
+ALL_MODES = ["comment_only", "context_only", "context_plus_comment"]
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--mode",
-        choices=["comment_only", "context_plus_comment", "all"],
+        choices=ALL_MODES + ["all"],
         default="all",
-        help="Train one input condition or both conditions sequentially.",
+        help="Train one input condition or all three conditions sequentially.",
     )
     parser.add_argument(
         "--resume",
@@ -70,6 +71,8 @@ def set_seed(seed=SEED):
 def build_text(row, mode):
     if mode == "comment_only":
         return f"Reddit reply:\n{row['comment']}"
+    if mode == "context_only":
+        return f"Previous Reddit message:\n{row['context']}"
     if mode == "context_plus_comment":
         return f"Context:\n{row['context']}\n\nReply:\n{row['comment']}"
     raise ValueError(mode)
@@ -251,20 +254,19 @@ def main():
     print("Full-data split sizes:", len(train_df), len(val_df), len(test_df))
     print("Total examples used:", len(train_df) + len(val_df) + len(test_df))
 
-    modes = ["comment_only", "context_plus_comment"] if args.mode == "all" else [args.mode]
-    rows = []
+    modes = ALL_MODES if args.mode == "all" else [args.mode]
     for mode in modes:
-        rows.append(train_mode(
+        train_mode(
             train_df,
             val_df,
             test_df,
             mode,
             resume=args.resume,
             skip_completed=args.skip_completed,
-        ))
+        )
 
     completed = []
-    for mode in ["comment_only", "context_plus_comment"]:
+    for mode in ALL_MODES:
         path = REPORT_DIR / f"{mode}_metrics.json"
         if path.exists():
             completed.append(json.loads(path.read_text(encoding="utf-8")))
