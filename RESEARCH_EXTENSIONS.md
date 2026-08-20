@@ -1,6 +1,8 @@
 # Advanced Research Extensions
 
-This file fixes the research questions and metrics **before** the remaining GPU results are observed.
+This file fixes the research questions and metrics **before** the remaining GPU results are observed. All extensions below serve the same central question:
+
+> **Do models genuinely use conversational context for sarcasm detection, and under what conditions?**
 
 ## 1. Unseen-subreddit generalization
 
@@ -8,21 +10,14 @@ This file fixes the research questions and metrics **before** the remaining GPU 
 Does a sarcasm detector learn the task itself, or does it exploit community-specific Reddit shortcuts?
 
 ### Protocol
-`src/subreddit_generalization_utils.py` creates a deterministic group-disjoint split using `subreddit` as the grouping variable. No subreddit may appear in more than one of train, validation, or test.
+`src/subreddit_generalization_utils.py` creates a deterministic group-disjoint split using `subreddit`. No subreddit may appear in more than one of train, validation, or test.
 
-`scripts/25_unseen_subreddit_generalization.py` compares:
-
-- TF-IDF: comment only vs context + comment
-- MiniLM: comment only vs separate context/comment embeddings
+`scripts/25_unseen_subreddit_generalization.py` compares comment-only and context-aware variants for TF-IDF and MiniLM.
 
 ### Primary quantity
-
 `ContextGain_unseen = MacroF1(context) - MacroF1(comment only)`
 
-The comparison with the ordinary IID split asks whether context becomes more or less useful when community identity cannot be reused across train and test.
-
-### Interpretation
-A larger context gain on unseen subreddits would support the hypothesis that conversational information generalizes better than subreddit-specific lexical shortcuts. A smaller or negative gain is also informative: context itself may be community-dependent or noisy.
+The comparison with the IID split asks whether context becomes more or less useful when community identity cannot be reused across train and test.
 
 ---
 
@@ -32,19 +27,16 @@ A larger context gain on unseen subreddits would support the hypothesis that con
 Does increasing decoder-model size improve the ability to exploit the *correct conversational relation*, rather than merely improving average accuracy?
 
 ### Protocol
-`scripts/24_qwen_basic_controls.py` evaluates Qwen2.5-0.5B-Instruct and Qwen2.5-1.5B-Instruct on the same balanced held-out subset with identical few-shot demonstrations under:
+`scripts/24_qwen_basic_controls.py` evaluates Qwen2.5-0.5B-Instruct and Qwen2.5-1.5B-Instruct on the same balanced held-out subset under:
 
 - comment only
 - true context + comment
 - random context + comment
 
 ### Primary quantities
-
 `ContextGain = MacroF1(true context) - MacroF1(comment only)`
 
 `ContextSensitivity = MacroF1(true context) - MacroF1(random context)`
-
-The script writes `qwen_context_utilization_by_scale.csv` so scaling is interpreted in terms of context use, not only raw model performance.
 
 ---
 
@@ -56,13 +48,7 @@ Which examples are affected by context, and what properties characterize them?
 ### Protocol
 The full-data prediction files store `P(sarcastic)` for comment-only, true-context, random-context, and same-subreddit-wrong-context conditions.
 
-`scripts/26_behavioral_context_interpretability.py` computes per example:
-
-- `DeltaP_comment_to_true = P(sarcastic | true context, reply) - P(sarcastic | reply)`
-- `DeltaP_true_to_random = P(sarcastic | true context, reply) - P(sarcastic | random context, reply)`
-- analogous same-subreddit perturbation
-
-It groups examples into behavioral categories:
+`scripts/26_behavioral_context_interpretability.py` computes per-example probability shifts and groups examples into:
 
 - context helped
 - context hurt
@@ -70,22 +56,55 @@ It groups examples into behavioral categories:
 - context sensitive
 - other
 
-It then characterizes these groups using:
+The groups are characterized using comment/context length, semantic similarity, `/s`, and subreddit.
 
-- comment length
-- context length
-- context/reply semantic similarity
-- explicit sarcasm markers such as `/s`
-- subreddit
+---
 
-Thresholds are fixed in code before the final Qwen results: `0.05` for probability-level irrelevance and `0.25` for strong context sensitivity.
+## 4. Encoder-only cross-encoders as a hypothesis-driven follow-up
+
+The semantic hard-negative experiment showed that separate frozen embeddings may preserve semantic compatibility without identifying the exact parent/reply relation.
+
+This generates a specific architectural hypothesis:
+
+> Joint token-level self-attention across context and reply may resolve relational information that separate sentence embeddings miss.
+
+The core follow-up therefore includes:
+
+- `scripts/30_bert_cross_encoder.py` - BERT-base
+- `scripts/27_roberta_cross_encoder.py` - RoBERTa-base
+
+Both use the original three input controls: comment only, context only, and context + comment.
+
+This also provides a direct encoder-only comparison with the Qwen decoder model requested in lecturer feedback.
+
+---
+
+## 5. Failure-derived interventions
+
+### Field-aware TF-IDF
+
+Observed failure: naive concatenation of parent context reduces TF-IDF performance.
+
+Hypothesis: the problem may be lexical dilution rather than lack of useful context.
+
+`scripts/28_field_aware_tfidf.py` separates comment/context feature spaces and tunes the context weight using validation only.
+
+### Selective context routing
+
+Observed failure: context helps some examples and hurts others.
+
+Hypothesis: context may be useful primarily when the reply-only decision is uncertain.
+
+`scripts/29_selective_context_routing.py` tunes an uncertainty threshold on validation and switches to the context-aware prediction only for uncertain reply-only examples.
+
+These experiments explicitly test explanations generated by previous model failures.
 
 ---
 
 ## Scope discipline
 
-The project deliberately does **not** add unrelated course topics such as RAG, RLHF, agents, or decoding-strategy comparisons. The extensions above all answer the same central question:
+The project deliberately excludes unrelated course topics such as RAG, RLHF, agents, and decoding-strategy comparisons. The goal is not syllabus coverage for its own sake; it is to apply the most relevant course ideas to deepen one coherent scientific investigation.
 
-> Do models genuinely use conversational context for sarcasm detection, and under what conditions?
+The final research sequence is:
 
-Encoder-only cross-encoder experiments and LoRA-rank ablations remain optional second-priority extensions if compute/time allows; they are not required for the core research story.
+> baseline context question -> representation effects -> hard counterfactual context -> joint encoder interaction -> modern decoder + PEFT -> scale as context utilization -> unseen-community generalization -> behavioral interpretability -> failure-derived fixes.
