@@ -74,7 +74,9 @@ def main():
             ("validation", val_df, y_val),
             ("test", test_df, y_test),
         ]:
-            pred = model.predict(text_for_mode(df, mode))
+            texts = text_for_mode(df, mode)
+            pred = model.predict(texts)
+            prob = model.predict_proba(texts)[:, 1]
             row = {
                 "model": "TF-IDF + Logistic Regression",
                 "input": mode,
@@ -86,8 +88,10 @@ def main():
             print(row)
 
             if split_name == "test":
-                out = df[["context", "comment", "label"]].copy()
+                keep = [c for c in ["subreddit", "context", "comment", "label"] if c in df.columns]
+                out = df[keep].copy()
                 out["prediction"] = pred
+                out["prob_sarcastic"] = prob.astype(np.float32)
                 out.to_parquet(REPORT_DIR / f"{mode}_test_predictions.parquet", index=False)
 
     metrics = pd.DataFrame(rows)
