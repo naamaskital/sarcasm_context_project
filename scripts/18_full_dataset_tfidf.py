@@ -54,6 +54,14 @@ def make_model():
     ])
 
 
+def save_predictions(df, pred, prob, mode, split_name):
+    keep = [c for c in ["subreddit", "context", "comment", "label"] if c in df.columns]
+    out = df[keep].copy()
+    out["prediction"] = pred
+    out["prob_sarcastic"] = prob.astype(np.float32)
+    out.to_parquet(REPORT_DIR / f"{mode}_{split_name}_predictions.parquet", index=False)
+
+
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     train_df, val_df, test_df = load_or_create_splits()
@@ -86,13 +94,7 @@ def main():
             }
             rows.append(row)
             print(row)
-
-            if split_name == "test":
-                keep = [c for c in ["subreddit", "context", "comment", "label"] if c in df.columns]
-                out = df[keep].copy()
-                out["prediction"] = pred
-                out["prob_sarcastic"] = prob.astype(np.float32)
-                out.to_parquet(REPORT_DIR / f"{mode}_test_predictions.parquet", index=False)
+            save_predictions(df, pred, prob, mode, split_name)
 
     metrics = pd.DataFrame(rows)
     metrics.to_csv(REPORT_DIR / "full_dataset_tfidf_metrics.csv", index=False)
