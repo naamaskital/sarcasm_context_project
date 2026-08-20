@@ -144,8 +144,14 @@ def load_model(model_id):
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype, device_map="auto")
+
+    # Both Qwen models used here fit comfortably on the 8 GB project GPU in FP16.
+    # Explicit placement avoids an Accelerate/device_map="auto" dispatch hang seen on
+    # the RTX 2070 + PyTorch cu118 environment used for the final run.
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype)
+    model.to("cuda")
     model.eval()
+    print("Model device:", next(model.parameters()).device)
     return model, tokenizer
 
 
