@@ -30,47 +30,43 @@ def add_standard_rows(rows, df, model_col="model", input_col="input", n_col="n_e
         })
 
 
+def add_transformer_family(rows, folder, filename, pending_name):
+    df = load_csv(OUT_DIR / folder / filename)
+    if not df.empty:
+        for _, r in df.iterrows():
+            rows.append({
+                "model": r["model"],
+                "input": r["input"],
+                "n_test": int(r["test_examples"]),
+                "accuracy": r["accuracy"],
+                "macro_f1": r["macro_f1"],
+                "sarcastic_f1": r["sarcastic_f1"],
+                "status": "complete",
+            })
+    else:
+        for mode in ["comment_only", "context_only", "context_plus_comment"]:
+            rows.append({
+                "model": pending_name,
+                "input": mode,
+                "n_test": 101078,
+                "accuracy": pd.NA,
+                "macro_f1": pd.NA,
+                "sarcastic_f1": pd.NA,
+                "status": "pending_gpu",
+            })
+
+
 def main():
     main_rows = []
     auxiliary = []
 
-    add_standard_rows(
-        main_rows,
-        load_csv(OUT_DIR / "tfidf" / "full_dataset_tfidf_metrics.csv"),
-    )
-    add_standard_rows(
-        main_rows,
-        load_csv(OUT_DIR / "embeddings" / "full_dataset_embedding_metrics.csv"),
-    )
+    add_standard_rows(main_rows, load_csv(OUT_DIR / "tfidf" / "full_dataset_tfidf_metrics.csv"))
+    add_standard_rows(main_rows, load_csv(OUT_DIR / "embeddings" / "full_dataset_embedding_metrics.csv"))
 
-    for family, filename in [
-        ("bert_cross_encoder", "bert_cross_encoder_metrics.csv"),
-        ("roberta_cross_encoder", "roberta_cross_encoder_metrics.csv"),
-    ]:
-        df = load_csv(OUT_DIR / family / filename)
-        if not df.empty:
-            for _, r in df.iterrows():
-                main_rows.append({
-                    "model": r["model"],
-                    "input": r["input"],
-                    "n_test": int(r["test_examples"]),
-                    "accuracy": r["accuracy"],
-                    "macro_f1": r["macro_f1"],
-                    "sarcastic_f1": r["sarcastic_f1"],
-                    "status": "complete",
-                })
-        else:
-            model_name = "bert-base-uncased cross-encoder" if family.startswith("bert") else "roberta-base cross-encoder"
-            for mode in ["comment_only", "context_only", "context_plus_comment"]:
-                main_rows.append({
-                    "model": model_name,
-                    "input": mode,
-                    "n_test": 101078,
-                    "accuracy": pd.NA,
-                    "macro_f1": pd.NA,
-                    "sarcastic_f1": pd.NA,
-                    "status": "pending_gpu",
-                })
+    add_transformer_family(main_rows, "bert_cross_encoder", "bert_cross_encoder_metrics.csv", "bert-base-uncased cross-encoder")
+    add_transformer_family(main_rows, "roberta_cross_encoder", "roberta_cross_encoder_metrics.csv", "roberta-base cross-encoder")
+    add_transformer_family(main_rows, "deberta_cross_encoder", "deberta_cross_encoder_metrics.csv", "deberta-v3-base cross-encoder")
+    add_transformer_family(main_rows, "flan_t5_encoder_decoder", "flan_t5_encoder_decoder_metrics.csv", "flan-t5-base encoder-decoder classifier")
 
     qwen = load_csv(OUT_DIR / "qwen" / "full_dataset_qwen_metrics.csv")
     if not qwen.empty:
@@ -96,8 +92,6 @@ def main():
                 "status": "pending_gpu",
             })
 
-    # Failure-driven follow-ups and research extensions are kept in a second table
-    # because their protocols/metrics differ from the main architecture comparison.
     auxiliary_sources = [
         ("field_aware_tfidf", REPORTS / "full_dataset" / "field_aware_tfidf" / "field_aware_tfidf_metrics.csv"),
         ("selective_context_routing", REPORTS / "full_dataset" / "selective_context_routing" / "selective_context_routing_metrics.csv"),
