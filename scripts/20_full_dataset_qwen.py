@@ -107,6 +107,14 @@ def compute_metrics(pred):
     return summarize(labels, preds)
 
 
+def softmax_positive(logits):
+    logits = np.asarray(logits, dtype=np.float64)
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    exp = np.exp(shifted)
+    probs = exp / exp.sum(axis=1, keepdims=True)
+    return probs[:, 1].astype(np.float32)
+
+
 def precision_flags():
     use_bf16 = bool(torch.cuda.is_bf16_supported())
     return {"bf16": use_bf16, "fp16": not use_bf16}
@@ -192,6 +200,7 @@ def train_mode(train_df, val_df, test_df, mode, resume=False, skip_completed=Fal
 
     test_output = trainer.predict(test_ds)
     test_preds = np.argmax(test_output.predictions, axis=-1)
+    test_probs = softmax_positive(test_output.predictions)
     test_metrics = summarize(test_df["label"].to_numpy(), test_preds)
 
     final_adapter_dir.mkdir(parents=True, exist_ok=True)
@@ -199,8 +208,10 @@ def train_mode(train_df, val_df, test_df, mode, resume=False, skip_completed=Fal
     tokenizer.save_pretrained(str(final_adapter_dir))
     trainer.save_state()
 
-    predictions = test_df[["context", "comment", "label"]].copy()
+    keep = [c for c in ["subreddit", "context", "comment", "label"] if c in test_df.columns]
+    predictions = test_df[keep].copy()
     predictions["prediction"] = test_preds
+    predictions["prob_sarcastic"] = test_probs
     predictions.to_parquet(REPORT_DIR / f"{mode}_test_predictions.parquet", index=False)
 
     result = {
@@ -252,7 +263,6 @@ def main():
             skip_completed=args.skip_completed,
         ))
 
-    # Rebuild the summary from every completed mode, not just modes from this invocation.
     completed = []
     for mode in ["comment_only", "context_plus_comment"]:
         path = REPORT_DIR / f"{mode}_metrics.json"
