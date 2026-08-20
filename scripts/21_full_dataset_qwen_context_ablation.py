@@ -57,7 +57,7 @@ def same_subreddit_wrong_indices(test_df, seed=SEED):
     matched = np.zeros(len(test_df), dtype=bool)
 
     if "subreddit" in test_df.columns:
-        for subreddit, group in test_df.groupby("subreddit", sort=False):
+        for _, group in test_df.groupby("subreddit", sort=False):
             idx = group.index.to_numpy()
             if len(idx) < 2:
                 continue
@@ -75,10 +75,8 @@ def same_subreddit_wrong_indices(test_df, seed=SEED):
 
 def build_perturbed_test(test_df):
     out = test_df.copy().reset_index(drop=True)
-
     random_idx = derangement(len(out), SEED)
     subreddit_idx, subreddit_matched = same_subreddit_wrong_indices(out, SEED)
-
     out["random_context"] = out.iloc[random_idx]["context"].to_numpy()
     out["same_subreddit_wrong_context"] = out.iloc[subreddit_idx]["context"].to_numpy()
     out["same_subreddit_is_matched"] = subreddit_matched
@@ -94,12 +92,7 @@ def make_dataset(df, tokenizer, context_column):
     ds = Dataset.from_dict({"text": texts, "label": df["label"].astype(int).tolist()})
 
     def tokenize(batch):
-        return tokenizer(
-            batch["text"],
-            truncation=True,
-            max_length=MAX_LENGTH,
-            padding="max_length",
-        )
+        return tokenizer(batch["text"], truncation=True, max_length=MAX_LENGTH, padding="max_length")
 
     return ds.map(tokenize, batched=True, remove_columns=["text"])
 
@@ -112,17 +105,22 @@ def summarize(labels, preds):
     }
 
 
+def softmax_positive(logits):
+    logits = np.asarray(logits, dtype=np.float64)
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    exp = np.exp(shifted)
+    return (exp[:, 1] / exp.sum(axis=1)).astype(np.float32)
+
+
 def bootstrap_delta(y_true, reference_pred, alternative_pred):
     rng = np.random.default_rng(SEED)
     deltas = np.empty(BOOTSTRAP_RUNS, dtype=np.float64)
     n = len(y_true)
-
     for i in range(BOOTSTRAP_RUNS):
         sample = rng.integers(0, n, size=n)
         ref = f1_score(y_true[sample], reference_pred[sample], average="macro")
         alt = f1_score(y_true[sample], alternative_pred[sample], average="macro")
         deltas[i] = ref - alt
-
     low, high = np.percentile(deltas, [2.5, 97.5])
     return float(deltas.mean()), float(low), float(high)
 
@@ -144,13 +142,8 @@ def load_model():
     tokenizer = AutoTokenizer.from_pretrained(ADAPTER_DIR)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-
     dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    base = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_ID,
-        num_labels=2,
-        dtype=dtype,
-    )
+    base = AutoModelForSequenceClassification.from_pretrained(MODEL_ID, num_labels=2, dtype=dtype)
     base.config.pad_token_id = tokenizer.pad_token_id
     model = PeftModel.from_pretrained(base, ADAPTER_DIR)
     return model, tokenizer
@@ -184,15 +177,16 @@ def main():
     }
 
     y = test_df["label"].to_numpy()
-    preds = {}
-    rows = []
+    preds, probs, rows = {}, {}, []
 
     for condition, column in conditions.items():
         print("Evaluating:", condition)
         ds = make_dataset(test_df, tokenizer, column)
         output = trainer.predict(ds)
         pred = np.argmax(output.predictions, axis=-1)
+        prob = softmax_positive(output.predictions)
         preds[condition] = pred
+        probs[condition] = prob
         rows.append({"condition": condition, **summarize(y, pred)})
 
     true_pred = preds["true_context"]
@@ -209,7 +203,6 @@ def main():
                 "bootstrap_ci_high": 0.0,
             })
             continue
-
         alt = preds[condition]
         mean_delta, low, high = bootstrap_delta(y, true_pred, alt)
         row.update({
@@ -225,9 +218,13 @@ def main():
     metrics_df.to_csv(REPORT_DIR / "qwen_context_ablation_metrics.csv", index=False)
     sensitivity_df.to_csv(REPORT_DIR / "qwen_context_sensitivity.csv", index=False)
 
-    pred_out = test_df[["subreddit", "context", "random_context", "same_subreddit_wrong_context", "same_subreddit_is_matched", "comment", "label"]].copy()
-    for condition, pred in preds.items():
-        pred_out[f"prediction_{condition}"] = pred
+    keep = [c for c in ["subreddit", "context", "random_context", "same_subreddit_wrong_context", "same_subreddit_is_matched", "comment", "label"] if c in test_df.columns]
+    pred_out = test_df[keep].copy()
+    for condition in conditions:
+        pred_out[f"prediction_{condition}"] = preds[condition]
+        pred_out[f"prob_sarcastic_{condition}"] = probs[condition]
+    pred_out["delta_prob_true_minus_random"] = probs["true_context"] - probs["random_context"]
+    pred_out["delta_prob_true_minus_same_subreddit"] = probs["true_context"] - probs["same_subreddit_wrong_context"]
     pred_out.to_parquet(REPORT_DIR / "qwen_context_ablation_predictions.parquet", index=False)
 
     summary = {
