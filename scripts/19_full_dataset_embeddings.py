@@ -67,7 +67,6 @@ def select_features(X_context, X_comment, start, end, mode):
 
 
 def train_online_linear_classifier(X_context, X_comment, y, mode):
-    # Embeddings are L2-normalized by SentenceTransformer, so no extra scaler is needed.
     clf = SGDClassifier(
         loss="log_loss",
         penalty="l2",
@@ -89,13 +88,15 @@ def train_online_linear_classifier(X_context, X_comment, y, mode):
 
 def predict_in_chunks(clf, X_context, X_comment, mode):
     preds = np.empty(len(X_comment), dtype=np.int64)
+    probs = np.empty(len(X_comment), dtype=np.float32)
 
     for start in range(0, len(preds), CHUNK_SIZE):
         end = min(start + CHUNK_SIZE, len(preds))
         X = select_features(X_context, X_comment, start, end, mode)
         preds[start:end] = clf.predict(X)
+        probs[start:end] = clf.predict_proba(X)[:, 1].astype(np.float32)
 
-    return preds
+    return preds, probs
 
 
 def main():
@@ -136,7 +137,7 @@ def main():
         )
 
         for split_name, df in [("validation", val_df), ("test", test_df)]:
-            pred = predict_in_chunks(
+            pred, prob = predict_in_chunks(
                 clf,
                 embeddings[(split_name, "context")],
                 embeddings[(split_name, "comment")],
@@ -154,8 +155,10 @@ def main():
             print(row)
 
             if split_name == "test":
-                out = df[["context", "comment", "label"]].copy()
+                keep = [c for c in ["subreddit", "context", "comment", "label"] if c in df.columns]
+                out = df[keep].copy()
                 out["prediction"] = pred
+                out["prob_sarcastic"] = prob
                 out.to_parquet(REPORT_DIR / f"{mode}_test_predictions.parquet", index=False)
 
     metrics = pd.DataFrame(rows)
