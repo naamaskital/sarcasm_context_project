@@ -9,3 +9,5 @@ datasets
 huggingface_hub
 peft
 accelerate
+sentencepiece
+protobuf
