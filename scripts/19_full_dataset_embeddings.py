@@ -99,6 +99,14 @@ def predict_in_chunks(clf, X_context, X_comment, mode):
     return preds, probs
 
 
+def save_predictions(df, pred, prob, mode, split_name):
+    keep = [c for c in ["subreddit", "context", "comment", "label"] if c in df.columns]
+    out = df[keep].copy()
+    out["prediction"] = pred
+    out["prob_sarcastic"] = prob
+    out.to_parquet(REPORT_DIR / f"{mode}_{split_name}_predictions.parquet", index=False)
+
+
 def main():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -153,13 +161,7 @@ def main():
             }
             rows.append(row)
             print(row)
-
-            if split_name == "test":
-                keep = [c for c in ["subreddit", "context", "comment", "label"] if c in df.columns]
-                out = df[keep].copy()
-                out["prediction"] = pred
-                out["prob_sarcastic"] = prob
-                out.to_parquet(REPORT_DIR / f"{mode}_test_predictions.parquet", index=False)
+            save_predictions(df, pred, prob, mode, split_name)
 
     metrics = pd.DataFrame(rows)
     metrics.to_csv(REPORT_DIR / "full_dataset_embedding_metrics.csv", index=False)
