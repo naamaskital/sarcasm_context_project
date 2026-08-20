@@ -41,7 +41,7 @@ run_step 06_selective_context_routing python scripts/29_selective_context_routin
 run_step 07_unseen_subreddit python scripts/25_unseen_subreddit_generalization.py
 
 # Controlled scaling / prompting before fine-tuning
-run_step 08_qwen_basic_controls python scripts/24_qwen_basic_controls.py
+run_step 08_qwen_basic_controls python scripts/24_qwen_basic_controls.py --batch-size 4
 
 # Transformer architecture comparison
 run_step 09_bert python scripts/30_bert_cross_encoder.py --mode all --resume
