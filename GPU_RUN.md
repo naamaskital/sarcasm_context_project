@@ -1,26 +1,12 @@
 # GPU run guide - final focused sarcasm-context project
 
-The project is intentionally focused on one research question: **when and how conversational context improves sarcasm detection**. The code covers the lecturer requirements plus a small set of directly relevant research extensions. Unrelated additions such as agents, RAG, RLHF, or tool use are intentionally excluded.
+The project is intentionally focused on one research question: **when and how conversational context improves sarcasm detection**. The code covers the lecturer requirements plus directly motivated research extensions. Unrelated additions such as agents, RAG, RLHF, or tool use are intentionally excluded.
 
-## Final project components
+The execution order below follows the final scientific narrative:
 
-- classical lexical baseline: TF-IDF + Logistic Regression;
-- frozen encoder representation: all-MiniLM-L6-v2;
-- direct encoder-only cross-encoder: RoBERTa-base;
-- modern decoder/GPT-style model: Qwen2.5;
-- Qwen 0.5B vs 1.5B scaling framed as context utilization;
-- comment-only, context-only, true-context, and wrong-context controls;
-- prompt/input formatting ablation;
-- full-data Qwen + LoRA;
-- random, same-subreddit, and semantic hard-context perturbations;
-- paired bootstrap uncertainty;
-- qualitative helped/hurt/error analysis;
-- unseen-subreddit generalization;
-- behavioral interpretability: when does context matter?
+> baseline -> failure analysis -> targeted fix -> joint encoders -> decoder model -> scale -> counterfactual context -> generalization -> interpretability.
 
-See `RESEARCH_EXTENSIONS.md` for the pre-specified hypotheses and metrics.
-
-## 1. Prepare the GPU environment
+## 1. Prepare the environment
 
 ```bash
 git switch agent/full-dataset
@@ -40,10 +26,9 @@ CUDA must be `True` before running GPU experiments.
 
 ## 2. Recreate deterministic data protocols
 
-IID full-data split:
-
 ```bash
 python src/full_dataset_utils.py
+python src/subreddit_generalization_utils.py
 ```
 
 Expected IID sizes:
@@ -53,15 +38,38 @@ Expected IID sizes:
 - validation: 101,077
 - test: 101,078
 
-Create the disjoint-community protocol:
+The subreddit protocol additionally asserts that train/validation/test subreddit sets are disjoint.
+
+## 3. Re-run CPU baselines if probability/validation files are missing
+
+The updated scripts save validation and test probabilities required by later failure-driven experiments:
 
 ```bash
-python src/subreddit_generalization_utils.py
+python scripts/18_full_dataset_tfidf.py
+python scripts/19_full_dataset_embeddings.py
 ```
 
-This groups by `subreddit` and asserts that train, validation, and test subreddit sets do not overlap.
+If these updated prediction files already exist, skip this step.
 
-## 3. Unseen-subreddit generalization baseline
+## 4. Failure-derived fixes
+
+### Field-aware TF-IDF
+
+```bash
+python scripts/28_field_aware_tfidf.py
+```
+
+Tests whether the TF-IDF context failure is caused by naive lexical concatenation rather than useless context.
+
+### Selective context routing
+
+```bash
+python scripts/29_selective_context_routing.py
+```
+
+Tunes on validation only whether context should be used when the comment-only prediction is uncertain, then evaluates once on test.
+
+## 5. Unseen-subreddit generalization
 
 This step does not require CUDA:
 
@@ -69,24 +77,17 @@ This step does not require CUDA:
 python scripts/25_unseen_subreddit_generalization.py
 ```
 
-It compares comment-only vs context-aware variants for TF-IDF and MiniLM on subreddits absent from training.
+It tests Task-vs-Dataset learning by comparing comment-only and context-aware methods on subreddits unseen during training.
 
-Outputs:
+## 6. Qwen scaling as context utilization + prompt formatting
 
-```text
-reports/subreddit_generalization/unseen_subreddit_metrics.csv
-reports/subreddit_generalization/unseen_subreddit_context_gain.csv
-```
-
-## 4. Qwen scaling as context utilization + prompt formatting
-
-Run before expensive full-data fine-tuning:
+Before full-data fine-tuning:
 
 ```bash
 python scripts/24_qwen_basic_controls.py
 ```
 
-The fixed balanced held-out sample contains 500 examples per class by default. Both Qwen2.5-0.5B-Instruct and Qwen2.5-1.5B-Instruct are evaluated under:
+Qwen2.5-0.5B and Qwen2.5-1.5B are evaluated under identical few-shot conditions with:
 
 - comment only
 - true context + comment
@@ -97,17 +98,33 @@ The script computes:
 - `ContextGain = MacroF1(true context) - MacroF1(comment only)`
 - `ContextSensitivity = MacroF1(true context) - MacroF1(random context)`
 
-For Qwen 0.5B it also compares structured `Previous Reddit message:` / `Reply:` formatting with plain concatenation.
+Qwen 0.5B also receives the prompt-formatting control: structured Context/Reply fields versus plain concatenation.
 
-If GPU memory is limited, reduce only inference batch size:
+If memory is limited:
 
 ```bash
 python scripts/24_qwen_basic_controls.py --batch-size 2
 ```
 
-## 5. RoBERTa encoder-only cross-encoder
+## 7. Encoder-only progression: BERT and RoBERTa cross-encoders
 
-Run the direct encoder-only comparison on the same full IID split:
+These models test the hypothesis generated by the MiniLM semantic-hard-negative failure: joint token-level interaction may capture relations that separate frozen sentence embeddings miss.
+
+### BERT-base
+
+```bash
+python scripts/30_bert_cross_encoder.py --mode comment_only --resume
+python scripts/30_bert_cross_encoder.py --mode context_only --resume
+python scripts/30_bert_cross_encoder.py --mode context_plus_comment --resume
+```
+
+Or resume/skip all:
+
+```bash
+python scripts/30_bert_cross_encoder.py --mode all --resume --skip-completed
+```
+
+### RoBERTa-base
 
 ```bash
 python scripts/27_roberta_cross_encoder.py --mode comment_only --resume
@@ -115,17 +132,17 @@ python scripts/27_roberta_cross_encoder.py --mode context_only --resume
 python scripts/27_roberta_cross_encoder.py --mode context_plus_comment --resume
 ```
 
-RoBERTa receives context and reply as an actual sentence pair in the combined condition, rather than as two frozen embeddings. It trains for one full epoch and saves probabilities and predictions for the complete test set.
-
-If all modes are already complete:
+Or:
 
 ```bash
 python scripts/27_roberta_cross_encoder.py --mode all --resume --skip-completed
 ```
 
-## 6. Train the three final full-data Qwen controls
+Both use all three input conditions from the original class presentation.
 
-Run each separately so progress is recoverable:
+## 8. Full-data Qwen2.5-0.5B + LoRA
+
+Run all three original input controls:
 
 ```bash
 python scripts/20_full_dataset_qwen.py --mode comment_only --resume
@@ -133,82 +150,77 @@ python scripts/20_full_dataset_qwen.py --mode context_only --resume
 python scripts/20_full_dataset_qwen.py --mode context_plus_comment --resume
 ```
 
-The script:
-
-- requires CUDA and fails immediately on CPU;
-- trains Qwen2.5-0.5B-Instruct + LoRA for one full epoch over 808,616 training examples per condition;
-- evaluates complete validation/test sets;
-- checkpoints every 1,000 optimizer steps;
-- supports `--resume`;
-- saves final adapters and tokenizer;
-- saves both predictions and `P(sarcastic)` for behavioral analysis.
-
-If all modes are already complete:
+Or:
 
 ```bash
 python scripts/20_full_dataset_qwen.py --mode all --resume --skip-completed
 ```
 
-## 7. Full-test Qwen context perturbation
+Each condition uses one full epoch over 808,616 training examples. The script checkpoints, supports resume, saves the final adapter, and stores predictions plus `P(sarcastic)`.
+
+## 9. Full-test Qwen counterfactual context evaluation
+
+After the context+comment adapter exists:
 
 ```bash
 python scripts/21_full_dataset_qwen_context_ablation.py
 ```
 
-The same context-trained adapter is evaluated on all 101,078 IID test examples with:
+The same trained model is tested with:
 
 - true context
 - random wrong context
 - same-subreddit wrong context
 
-Outputs include Macro-F1 deltas, paired bootstrap 95% CIs, changed-prediction counts, and `P(sarcastic)` under every condition. The semantic-nearest wrong-context condition remains the focused hard-negative diagnostic in `scripts/16_hard_context_ablation.py`.
+It produces Macro-F1 deltas, paired bootstrap 95% confidence intervals, prediction-flip counts, and condition-specific probabilities.
 
-## 8. Behavioral interpretability: when does context matter?
+The semantically similar wrong-context experiment remains the focused diagnostic in `scripts/16_hard_context_ablation.py`.
 
-After Qwen predictions and perturbations exist:
+## 10. Behavioral interpretability: when does context matter?
 
 ```bash
 python scripts/26_behavioral_context_interpretability.py
 ```
 
-It computes per-example probability shifts:
+This analyzes per-example probability changes and groups examples into context-helped, context-hurt, context-irrelevant, and context-sensitive behavior, then characterizes them by text length, semantic similarity, `/s`, and subreddit.
 
-- comment -> true context
-- true context -> random context
-- true context -> same-subreddit wrong context
-
-and categorizes examples as context-helped, context-hurt, context-irrelevant, context-sensitive, or other. The groups are characterized by comment/context length, semantic similarity, explicit sarcasm markers, and subreddit.
-
-## 9. Refresh qualitative analysis
+## 11. Refresh qualitative examples
 
 ```bash
 python scripts/23_qualitative_error_analysis.py
 ```
 
-This adds Qwen helped/hurt and perturbation examples to the existing qualitative analysis.
+This regenerates the deterministic helped/hurt/hard-negative examples including Qwen once those predictions exist.
 
-## 10. Collect final tables
+## 12. Collect all final tables
 
 ```bash
 python scripts/22_collect_final_results.py
 ```
 
-Main table:
+Outputs:
 
 ```text
 reports/full_dataset/final_results_full_dataset.csv
+reports/full_dataset/final_auxiliary_results.csv
 ```
 
-## 11. What to send back for final report integration
+The first is the architecture/input comparison. The second collects hypothesis-driven follow-ups such as routing, hard context, scaling, and generalization.
+
+## 13. What to send for report integration
 
 Send the console sections headed:
 
+- `FINAL` from updated TF-IDF/MiniLM only if rerun
+- final field-aware TF-IDF output
+- final selective-routing output
 - `FINAL UNSEEN-SUBREDDIT RESULTS` and `CONTEXT GAIN ON UNSEEN SUBREDDITS`
 - `FINAL BASIC CONTROLS` and `CONTEXT UTILIZATION BY SCALE`
+- `FINAL BERT`
 - `FINAL ROBERTA`
 - `FINAL` from full-data Qwen
 - `FINAL METRICS` and `CONTEXT SENSITIVITY`
 - `WHEN DOES CONTEXT MATTER?`
 - `CATEGORY COUNTS`
 
-At that point the report should be finalized by integrating results and discussion only; no unrelated experiments should be added.
+At that point the report should be finalized by integrating the results into the hypothesis-driven narrative. No additional unrelated experiments should be added.
