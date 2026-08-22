@@ -1,0 +1,14 @@
+{
+  "model": "bert-base-uncased cross-encoder",
+  "input": "comment_only",
+  "epochs": 1,
+  "train_examples": 808616,
+  "validation_examples": 101077,
+  "test_examples": 101078,
+  "validation_accuracy": 0.780573226352187,
+  "validation_macro_f1": 0.7805452125162722,
+  "validation_sarcastic_f1": 0.7780657427327763,
+  "accuracy": 0.7783098201389026,
+  "macro_f1": 0.7782701499501977,
+  "sarcastic_f1": 0.775304333874817
+}

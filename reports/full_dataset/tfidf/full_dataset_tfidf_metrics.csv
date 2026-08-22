@@ -1,7 +1,7 @@
 model,input,split,n_examples,accuracy,macro_f1,sarcastic_f1
-TF-IDF + Logistic Regression,comment_only,validation,101077,0.725249,0.724947,0.715825
-TF-IDF + Logistic Regression,comment_only,test,101078,0.724579,0.724161,0.713422
-TF-IDF + Logistic Regression,context_only,validation,101077,0.586177,0.586138,0.582113
-TF-IDF + Logistic Regression,context_only,test,101078,0.585657,0.585622,0.581855
-TF-IDF + Logistic Regression,context_plus_comment,validation,101077,0.704413,0.704138,0.695117
-TF-IDF + Logistic Regression,context_plus_comment,test,101078,0.704852,0.704483,0.694049
+TF-IDF + Logistic Regression,comment_only,validation,101077,0.7252490675425666,0.7249465710129669,0.7158250191864927
+TF-IDF + Logistic Regression,comment_only,test,101078,0.7245790379706761,0.7241609844478994,0.7134224802610585
+TF-IDF + Logistic Regression,context_only,validation,101077,0.5861768750556506,0.5861377316883956,0.5821128139548825
+TF-IDF + Logistic Regression,context_only,test,101078,0.5856566216189477,0.5856223674017225,0.5818548507872483
+TF-IDF + Logistic Regression,context_plus_comment,validation,101077,0.7044134669608318,0.7041383931820953,0.6951170978111129
+TF-IDF + Logistic Regression,context_plus_comment,test,101078,0.7048516986881418,0.7044832628237552,0.694048754473946

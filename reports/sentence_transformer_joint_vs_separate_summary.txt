@@ -1,0 +1,16 @@
+Sentence Transformer: joint vs separate embeddings
+============================================================
+Model: sentence-transformers/all-MiniLM-L6-v2
+Input file: data/reddit_sarcasm_context_sample.csv
+Train size: 8000
+Test size: 2000
+
+                                    method  accuracy  macro_f1  sarcastic_f1
+           joint_context_comment_embedding    0.6175  0.617498      0.618454
+separate_context_comment_embeddings_concat    0.6335  0.633443      0.638025
+
+Elapsed minutes: 0.32
+
+Interpretation:
+joint_context_comment_embedding means the context and comment were combined into one text before embedding.
+separate_context_comment_embeddings_concat means the context and comment were embedded separately, and the two vectors were concatenated before training the classifier.

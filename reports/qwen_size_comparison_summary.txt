@@ -1,0 +1,63 @@
+Qwen size comparison experiment
+==================================================
+
+Goal:
+Compare two sizes of a GPT/decoder-style model, Qwen 0.5B and Qwen 1.5B, using the same few-shot prompting setup.
+
+Few-shot examples per class: 2
+Evaluation examples per class: 100
+Total evaluation examples: 200
+
+Metrics:
+       method                      model              setting  num_examples  valid_predictions  unknown_predictions  accuracy  macro_f1  sarcastic_f1
+qwen_few_shot Qwen/Qwen2.5-0.5B-Instruct         comment_only           200                200                    0      0.52  0.376299      0.076923
+qwen_few_shot Qwen/Qwen2.5-0.5B-Instruct context_plus_comment           200                200                    0      0.50  0.333333      0.000000
+qwen_few_shot Qwen/Qwen2.5-1.5B-Instruct         comment_only           200                200                    0      0.56  0.559604      0.546392
+qwen_few_shot Qwen/Qwen2.5-1.5B-Instruct context_plus_comment           200                200                    0      0.53  0.493043      0.629921
+
+Classification report - Qwen/Qwen2.5-0.5B-Instruct | comment_only:
+               precision    recall  f1-score   support
+
+not_sarcastic       0.51      1.00      0.68       100
+    sarcastic       1.00      0.04      0.08       100
+
+     accuracy                           0.52       200
+    macro avg       0.76      0.52      0.38       200
+ weighted avg       0.76      0.52      0.38       200
+
+
+Classification report - Qwen/Qwen2.5-0.5B-Instruct | context_plus_comment:
+               precision    recall  f1-score   support
+
+not_sarcastic       0.50      1.00      0.67       100
+    sarcastic       0.00      0.00      0.00       100
+
+     accuracy                           0.50       200
+    macro avg       0.25      0.50      0.33       200
+ weighted avg       0.25      0.50      0.33       200
+
+
+Classification report - Qwen/Qwen2.5-1.5B-Instruct | comment_only:
+               precision    recall  f1-score   support
+
+not_sarcastic       0.56      0.59      0.57       100
+    sarcastic       0.56      0.53      0.55       100
+
+     accuracy                           0.56       200
+    macro avg       0.56      0.56      0.56       200
+ weighted avg       0.56      0.56      0.56       200
+
+
+Classification report - Qwen/Qwen2.5-1.5B-Instruct | context_plus_comment:
+               precision    recall  f1-score   support
+
+not_sarcastic       0.57      0.26      0.36       100
+    sarcastic       0.52      0.80      0.63       100
+
+     accuracy                           0.53       200
+    macro avg       0.54      0.53      0.49       200
+ weighted avg       0.54      0.53      0.49       200
+
+
+Best setting by Macro-F1:
+Qwen/Qwen2.5-1.5B-Instruct | comment_only | Macro-F1 = 0.5596

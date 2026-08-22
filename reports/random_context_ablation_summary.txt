@@ -1,0 +1,147 @@
+Random Context Ablation
+======================================================================
+Input file: data/reddit_sarcasm_context_sample.csv
+Train size: 8000
+Test size: 2000
+
+                              method                              setting  accuracy  macro_f1  sarcastic_f1
+           tfidf_logistic_regression                         comment_only    0.6430  0.642562      0.630052
+           tfidf_logistic_regression            true_context_plus_comment    0.6430  0.642964      0.639394
+           tfidf_logistic_regression          random_context_plus_comment    0.6085  0.608284      0.599078
+          sentence_transformer_joint      true_context_plus_comment_joint    0.6175  0.617498      0.618454
+          sentence_transformer_joint    random_context_plus_comment_joint    0.5690  0.568948      0.564206
+sentence_transformer_separate_concat   true_context_plus_comment_separate    0.6335  0.633443      0.638025
+sentence_transformer_separate_concat random_context_plus_comment_separate    0.6370  0.636987      0.634809
+
+Interpretation guide:
+If true_context_plus_comment is better than random_context_plus_comment, then the specific conversational context adds useful information.
+If random_context_plus_comment is similar to true_context_plus_comment, then the model may not be using the specific context, and may rely mostly on the comment or on superficial extra text.
+
+Elapsed minutes: 0.70
+
+
+TF-IDF / comment_only
+============================================================
+Accuracy: 0.6430
+Macro F1: 0.6426
+Sarcastic F1: 0.6301
+               precision    recall  f1-score   support
+
+not_sarcastic     0.6336    0.6780    0.6551      1000
+    sarcastic     0.6538    0.6080    0.6301      1000
+
+     accuracy                         0.6430      2000
+    macro avg     0.6437    0.6430    0.6426      2000
+ weighted avg     0.6437    0.6430    0.6426      2000
+
+Confusion matrix:
+[[678 322]
+ [392 608]]
+
+TF-IDF / true_context_plus_comment
+============================================================
+Accuracy: 0.6430
+Macro F1: 0.6430
+Sarcastic F1: 0.6394
+               precision    recall  f1-score   support
+
+not_sarcastic     0.6402    0.6530    0.6465      1000
+    sarcastic     0.6459    0.6330    0.6394      1000
+
+     accuracy                         0.6430      2000
+    macro avg     0.6431    0.6430    0.6430      2000
+ weighted avg     0.6431    0.6430    0.6430      2000
+
+Confusion matrix:
+[[653 347]
+ [367 633]]
+
+TF-IDF / random_context_plus_comment
+============================================================
+Accuracy: 0.6085
+Macro F1: 0.6083
+Sarcastic F1: 0.5991
+               precision    recall  f1-score   support
+
+not_sarcastic     0.6036    0.6320    0.6175      1000
+    sarcastic     0.6139    0.5850    0.5991      1000
+
+     accuracy                         0.6085      2000
+    macro avg     0.6087    0.6085    0.6083      2000
+ weighted avg     0.6087    0.6085    0.6083      2000
+
+Confusion matrix:
+[[632 368]
+ [415 585]]
+
+Sentence Transformer joint / true_context_plus_comment_joint
+============================================================
+Accuracy: 0.6175
+Macro F1: 0.6175
+Sarcastic F1: 0.6185
+               precision    recall  f1-score   support
+
+not_sarcastic     0.6181    0.6150    0.6165      1000
+    sarcastic     0.6169    0.6200    0.6185      1000
+
+     accuracy                         0.6175      2000
+    macro avg     0.6175    0.6175    0.6175      2000
+ weighted avg     0.6175    0.6175    0.6175      2000
+
+Confusion matrix:
+[[615 385]
+ [380 620]]
+
+Sentence Transformer joint / random_context_plus_comment_joint
+============================================================
+Accuracy: 0.5690
+Macro F1: 0.5689
+Sarcastic F1: 0.5642
+               precision    recall  f1-score   support
+
+not_sarcastic     0.5675    0.5800    0.5737      1000
+    sarcastic     0.5706    0.5580    0.5642      1000
+
+     accuracy                         0.5690      2000
+    macro avg     0.5690    0.5690    0.5689      2000
+ weighted avg     0.5690    0.5690    0.5689      2000
+
+Confusion matrix:
+[[580 420]
+ [442 558]]
+
+Sentence Transformer separate / true_context_plus_comment_separate
+============================================================
+Accuracy: 0.6335
+Macro F1: 0.6334
+Sarcastic F1: 0.6380
+               precision    recall  f1-score   support
+
+not_sarcastic     0.6369    0.6210    0.6289      1000
+    sarcastic     0.6302    0.6460    0.6380      1000
+
+     accuracy                         0.6335      2000
+    macro avg     0.6336    0.6335    0.6334      2000
+ weighted avg     0.6336    0.6335    0.6334      2000
+
+Confusion matrix:
+[[621 379]
+ [354 646]]
+
+Sentence Transformer separate / random_context_plus_comment_separate
+============================================================
+Accuracy: 0.6370
+Macro F1: 0.6370
+Sarcastic F1: 0.6348
+               precision    recall  f1-score   support
+
+not_sarcastic     0.6354    0.6430    0.6392      1000
+    sarcastic     0.6387    0.6310    0.6348      1000
+
+     accuracy                         0.6370      2000
+    macro avg     0.6370    0.6370    0.6370      2000
+ weighted avg     0.6370    0.6370    0.6370      2000
+
+Confusion matrix:
+[[643 357]
+ [369 631]]

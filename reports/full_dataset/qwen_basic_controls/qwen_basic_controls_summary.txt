@@ -1,0 +1,16 @@
+Qwen basic controls and context-utilization scaling
+======================================================================
+
+                    purpose                      model                       input prompt_format  n_examples  accuracy_all  accuracy_valid  macro_f1_valid  sarcastic_f1_valid  valid_rate  unknown_predictions
+context_utilization_scaling Qwen/Qwen2.5-0.5B-Instruct                comment_only    structured        1000         0.530        0.530000        0.435028            0.203390       1.000                    0
+context_utilization_scaling Qwen/Qwen2.5-0.5B-Instruct        context_plus_comment    structured        1000         0.529        0.529530        0.433673            0.200680       0.999                    1
+context_utilization_scaling Qwen/Qwen2.5-0.5B-Instruct random_context_plus_comment    structured        1000         0.530        0.530531        0.421313            0.169912       0.999                    1
+     prompt_format_ablation Qwen/Qwen2.5-0.5B-Instruct        context_plus_comment  plain_concat        1000         0.542        0.542543        0.497200            0.346209       0.999                    1
+context_utilization_scaling Qwen/Qwen2.5-1.5B-Instruct                comment_only    structured        1000         0.537        0.537000        0.460292            0.663762       1.000                    0
+context_utilization_scaling Qwen/Qwen2.5-1.5B-Instruct        context_plus_comment    structured        1000         0.558        0.558559        0.524873            0.651383       0.999                    1
+context_utilization_scaling Qwen/Qwen2.5-1.5B-Instruct random_context_plus_comment    structured        1000         0.552        0.552553        0.517853            0.647198       0.999                    1
+
+CONTEXT UTILIZATION BY SCALE
+                     model  comment_macro_f1  true_context_macro_f1  random_context_macro_f1  context_gain  context_sensitivity
+Qwen/Qwen2.5-0.5B-Instruct          0.435028               0.433673                 0.421313     -0.001355              0.01236
+Qwen/Qwen2.5-1.5B-Instruct          0.460292               0.524873                 0.517853      0.064581              0.00702

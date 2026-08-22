@@ -1,0 +1,8 @@
+method,setting,accuracy,macro_f1,sarcastic_f1
+tfidf_logistic_regression,comment_only,0.643,0.6425621386198093,0.6300518134715026
+tfidf_logistic_regression,true_context_plus_comment,0.643,0.6429642964296429,0.6393939393939394
+tfidf_logistic_regression,random_context_plus_comment,0.6085,0.6082836746593305,0.5990783410138248
+sentence_transformer_joint,true_context_plus_comment_joint,0.6175,0.6174976093600585,0.6184538653366584
+sentence_transformer_joint,random_context_plus_comment_joint,0.569,0.5689478426889654,0.564206268958544
+sentence_transformer_separate_concat,true_context_plus_comment_separate,0.6335,0.6334427254258478,0.6380246913580246
+sentence_transformer_separate_concat,random_context_plus_comment_separate,0.637,0.6369869315295351,0.6348088531187123

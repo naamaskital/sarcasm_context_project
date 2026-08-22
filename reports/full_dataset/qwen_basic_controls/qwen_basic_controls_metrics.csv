@@ -1,0 +1,8 @@
+purpose,model,input,prompt_format,n_examples,accuracy_all,accuracy_valid,macro_f1_valid,sarcastic_f1_valid,valid_rate,unknown_predictions
+context_utilization_scaling,Qwen/Qwen2.5-0.5B-Instruct,comment_only,structured,1000,0.53,0.53,0.4350282485875706,0.2033898305084746,1.0,0
+context_utilization_scaling,Qwen/Qwen2.5-0.5B-Instruct,context_plus_comment,structured,1000,0.529,0.5295295295295295,0.4336734693877551,0.20068027210884354,0.999,1
+context_utilization_scaling,Qwen/Qwen2.5-0.5B-Instruct,random_context_plus_comment,structured,1000,0.53,0.5305305305305306,0.4213130446059693,0.16991150442477876,0.999,1
+prompt_format_ablation,Qwen/Qwen2.5-0.5B-Instruct,context_plus_comment,plain_concat,1000,0.542,0.5425425425425425,0.4971998929516598,0.34620886981402005,0.999,1
+context_utilization_scaling,Qwen/Qwen2.5-1.5B-Instruct,comment_only,structured,1000,0.537,0.537,0.46029181543612036,0.663761801016703,1.0,0
+context_utilization_scaling,Qwen/Qwen2.5-1.5B-Instruct,context_plus_comment,structured,1000,0.558,0.5585585585585585,0.5248731457166121,0.6513833992094862,0.999,1
+context_utilization_scaling,Qwen/Qwen2.5-1.5B-Instruct,random_context_plus_comment,structured,1000,0.552,0.5525525525525525,0.5178534988452531,0.6471981057616417,0.999,1
