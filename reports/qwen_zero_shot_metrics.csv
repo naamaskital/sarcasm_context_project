@@ -1,3 +1,0 @@
-method,model,setting,num_examples,valid_predictions,unknown_predictions,accuracy,macro_f1,sarcastic_f1
-qwen_zero_shot,Qwen/Qwen2.5-0.5B-Instruct,comment_only,20,20,0,0.5,0.45054945054945056,0.2857142857142857
-qwen_zero_shot,Qwen/Qwen2.5-0.5B-Instruct,context_plus_comment,20,19,1,0.5263157894736842,0.5043478260869565,0.4
