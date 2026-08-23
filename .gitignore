@@ -2,16 +2,22 @@
 __pycache__/
 *.pyc
 
+# Raw/local datasets and caches
 data/
-reports/
-
 .cache/
 .ipynb_checkpoints/
 
+# Model/checkpoint artifacts
 *.pt
 *.pth
 *.bin
 *.ckpt
+models/
 
-data
-reports
+# Keep compact report metrics in Git, ignore only heavy generated artifacts
+reports/**/*.parquet
+reports/**/*_predictions.csv
+reports/**/*_predictions.parquet
+reports/**/tmp/
+reports/final_run_logs/
+
