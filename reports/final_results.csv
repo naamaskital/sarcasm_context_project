@@ -1,9 +1,0 @@
-model,input_setting,accuracy,macro_f1,sarcastic_f1,notes
-TF-IDF + Logistic Regression,context_only,0.5425,0.5425,0.5395,reported final classical run
-TF-IDF + Logistic Regression,comment_only,0.6430,0.6426,0.6301,reported final classical run
-TF-IDF + Logistic Regression,true_context_plus_comment,0.6500,0.6499,0.6436,reported final classical run
-Sentence Transformer separate embeddings,true_context_plus_comment,0.6335,0.6334,0.6380,reported final embedding run
-Qwen2.5-0.5B + LoRA,context_only,0.5660,0.5612545289855073,0.6068840579710145,verified from saved training log
-Qwen2.5-0.5B + LoRA,comment_only,0.6830,0.6829743209199945,0.6801210898082745,verified from saved training log
-Qwen2.5-0.5B + LoRA,true_context_plus_comment,0.6850,0.6849971649744848,0.6859421734795613,verified from saved training log
-Qwen2.5-0.5B + LoRA,random_context_plus_comment,0.6530,0.6527829893683552,0.6614634146341464,verified from saved training log
