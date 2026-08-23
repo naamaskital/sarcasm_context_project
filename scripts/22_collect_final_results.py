@@ -92,9 +92,10 @@ def main():
                 "status": "pending_gpu",
             })
 
+    # These paths match the files produced by the experiment scripts.
     auxiliary_sources = [
-        ("field_aware_tfidf", REPORTS / "full_dataset" / "field_aware_tfidf" / "field_aware_tfidf_metrics.csv"),
-        ("selective_context_routing", REPORTS / "full_dataset" / "selective_context_routing" / "selective_context_routing_metrics.csv"),
+        ("field_aware_tfidf", REPORTS / "failure_driven" / "field_aware_tfidf" / "field_aware_tfidf_test_metrics.csv"),
+        ("selective_context_routing", REPORTS / "failure_driven" / "selective_context_routing" / "selective_context_routing_test_metrics.csv"),
         ("qwen_context_ablation", REPORTS / "full_dataset" / "qwen_context_ablation" / "qwen_context_ablation_metrics.csv"),
         ("qwen_scale_context_utilization", REPORTS / "full_dataset" / "qwen_basic_controls" / "qwen_context_utilization_by_scale.csv"),
         ("unseen_subreddit", REPORTS / "subreddit_generalization" / "unseen_subreddit_metrics.csv"),
@@ -105,10 +106,18 @@ def main():
     for experiment, path in auxiliary_sources:
         df = load_csv(path)
         if df.empty:
-            auxiliary.append({"experiment": experiment, "status": "pending_or_not_run", "source": str(path.relative_to(ROOT))})
+            auxiliary.append({
+                "experiment": experiment,
+                "status": "pending_or_not_run",
+                "source": str(path.relative_to(ROOT)),
+            })
         else:
             for _, r in df.iterrows():
-                row = {"experiment": experiment, "status": "complete", "source": str(path.relative_to(ROOT))}
+                row = {
+                    "experiment": experiment,
+                    "status": "complete",
+                    "source": str(path.relative_to(ROOT)),
+                }
                 row.update(r.to_dict())
                 auxiliary.append(row)
 
