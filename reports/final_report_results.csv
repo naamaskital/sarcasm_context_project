@@ -1,0 +1,42 @@
+section,model,input_or_condition,protocol,macro_f1,notes
+full_iid,TF-IDF + Logistic Regression,comment_only,full IID test,0.7242,
+full_iid,TF-IDF + Logistic Regression,context_only,full IID test,0.5856,
+full_iid,TF-IDF + Logistic Regression,context_plus_comment,full IID test,0.7045,
+full_iid,all-MiniLM-L6-v2 + linear classifier,comment_only,full IID test,0.6673,
+full_iid,all-MiniLM-L6-v2 + linear classifier,context_only,full IID test,0.5917,
+full_iid,all-MiniLM-L6-v2 + linear classifier,dual_embeddings,full IID test,0.6719,
+full_iid,BERT-base cross-encoder,comment_only,full IID test,0.7783,
+full_iid,BERT-base cross-encoder,context_only,full IID test,0.6097,
+full_iid,BERT-base cross-encoder,context_plus_comment,full IID test,0.7884,
+full_iid,RoBERTa-base cross-encoder,comment_only,full IID test,0.7840,final report value
+full_iid,RoBERTa-base cross-encoder,context_only,full IID test,0.6159,final report value
+full_iid,RoBERTa-base cross-encoder,context_plus_comment,full IID test,0.7955,final report value
+full_iid,DeBERTa-v3-base cross-encoder,comment_only,full IID test,0.7901,final report value
+full_iid,DeBERTa-v3-base cross-encoder,context_only,full IID test,0.6205,final report value
+full_iid,DeBERTa-v3-base cross-encoder,context_plus_comment,full IID test,0.8030,final report value
+full_iid,FLAN-T5-base,comment_only,full IID test,0.7561,final report value
+full_iid,FLAN-T5-base,context_only,full IID test,0.5981,final report value
+full_iid,FLAN-T5-base,context_plus_comment,full IID test,0.7705,final report value
+full_iid,Qwen2.5-0.5B + LoRA,comment_only,full IID test,0.7385,final report value
+full_iid,Qwen2.5-0.5B + LoRA,context_only,full IID test,0.6010,final report value
+full_iid,Qwen2.5-0.5B + LoRA,context_plus_comment,full IID test,0.7521,final report value
+failure_driven,Field-aware TF-IDF,context_plus_comment,full IID test,0.7297,validation-tuned context weight
+failure_driven,Selective context routing,routed_prediction,full IID test,0.7317,validation-tuned routing threshold
+hard_context,MiniLM context-aware classifier,true_context,balanced hard-context test,0.6540,
+hard_context,MiniLM context-aware classifier,random_wrong_context,balanced hard-context test,0.6375,
+hard_context,MiniLM context-aware classifier,same_subreddit_wrong_context,balanced hard-context test,0.6390,
+hard_context,MiniLM context-aware classifier,semantic_similar_wrong_context,balanced hard-context test,0.6540,
+qwen_controlled,Qwen2.5-0.5B + LoRA,context_only,3000 train / 500 val / 1000 test balanced,0.5613,5 epochs
+qwen_controlled,Qwen2.5-0.5B + LoRA,comment_only,3000 train / 500 val / 1000 test balanced,0.6830,5 epochs
+qwen_controlled,Qwen2.5-0.5B + LoRA,true_context_plus_comment,3000 train / 500 val / 1000 test balanced,0.6850,5 epochs
+qwen_controlled,Qwen2.5-0.5B + LoRA,random_context_plus_comment,3000 train / 500 val / 1000 test balanced,0.6528,5 epochs
+qwen_scaling,Qwen2.5-0.5B-Instruct,comment_only,1000 balanced test / 4-shot,0.4350,
+qwen_scaling,Qwen2.5-0.5B-Instruct,true_context_plus_comment,1000 balanced test / 4-shot,0.4337,
+qwen_scaling,Qwen2.5-0.5B-Instruct,random_context_plus_comment,1000 balanced test / 4-shot,0.4213,
+qwen_scaling,Qwen2.5-1.5B-Instruct,comment_only,1000 balanced test / 4-shot,0.4603,
+qwen_scaling,Qwen2.5-1.5B-Instruct,true_context_plus_comment,1000 balanced test / 4-shot,0.5249,
+qwen_scaling,Qwen2.5-1.5B-Instruct,random_context_plus_comment,1000 balanced test / 4-shot,0.5179,
+unseen_subreddit,TF-IDF + Logistic Regression,comment_only,subreddit-disjoint test,0.7099,final report value
+unseen_subreddit,TF-IDF + Logistic Regression,context_plus_comment,subreddit-disjoint test,0.6887,final report value
+unseen_subreddit,all-MiniLM-L6-v2 + linear classifier,comment_only,subreddit-disjoint test,0.6578,final report value
+unseen_subreddit,all-MiniLM-L6-v2 + linear classifier,dual_embeddings,subreddit-disjoint test,0.6598,final report value
