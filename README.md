@@ -50,6 +50,10 @@ The canonical compact table used by the final scientific report is stored in:
 
 ### Full-dataset IID results (Macro-F1)
 
+![Full IID Macro-F1 model comparison](docs/full_iid_macro_f1.svg)
+
+*Values are taken from `reports/final_report_results.csv` (`full_iid` rows). The blue series represents the context-aware condition (joint input for cross-encoders and dual embeddings for MiniLM). Context is not consistently beneficial across architectures; results from other protocols below should not be directly compared with these full-IID scores.*
+
 | Model | Comment Only | Context Only | Context + Comment |
 |---|---:|---:|---:|
 | TF-IDF + Logistic Regression | **0.7242** | 0.5856 | 0.7045 |
